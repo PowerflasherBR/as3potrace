@@ -1,0 +1,207 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>CsPotrace</name>
+    </assembly>
+    <members>
+        <member name="F:CsPotrace.Potrace.turdsize">
+            <summary>
+            area of largest path to be ignored
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.alphamax">
+            <summary>
+             corner threshold
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.curveoptimizing">
+            <summary>
+             use curve optimization
+             optimize the path p, replacing sequences of Bezier segments by a
+             single segment when possible.
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.opttolerance">
+            <summary>
+            curve optimization tolerance
+            </summary>
+        </member>
+        <member name="M:CsPotrace.Potrace.BitMapToBinary(System.Drawing.Bitmap,System.Int32)">
+            <summary>
+            
+            Produces a binary Matrix with Dimensions b.Width+2 and b.Height +2, where
+            the Border ( of width) in the Matrix is filled with 'true' -values.
+            On this way we avoid a lot of boundsinequalities.
+            For the threshold, we take the Maximum of (R,G,B ) of a Pixel at x,y. If this is less then the threshold the resultMatrix at x+1, y+1 is filled with
+            false else with true.
+            
+            </summary>
+            <param name="b"> A Bitmap, which will be transformed to a binary Matrix</param>
+            <param name="_treshold">Gives a threshold ( between 1 and 254 ) for Converting</param>
+            <returns>Returns a binaray boolean Matrix </returns>
+        </member>
+        <member name="M:CsPotrace.Potrace.BinaryToBitmap(System.Boolean[0:,0:],System.Boolean)">
+             <summary>
+             Makes a Black and White Bitmap from the Data of a Binarymatrix.
+             Value with 'true' returns a white Pixel such with 'false' a Black pixel.
+             </summary>
+            <param name="IgnoreBorder">If this value is set then a Border with 1 Pixel is ignored</param>
+             <param name="Matrix">A Binary Matrix, which have boolean values</param>
+             <returns>Returns a Black and white Image </returns>
+        </member>
+        <!-- Nicht wohlgeformter XML-Kommentar wurde für den Member "M:CsPotrace.Potrace.FindNext(System.Boolean[0:,0:],System.Int32@,System.Int32@)" ignoriert -->
+        <!-- Nicht wohlgeformter XML-Kommentar wurde für den Member "M:CsPotrace.Potrace.FindNext(System.Boolean[0:,0:],System.Int32@,System.Int32@,CsPotrace.Potrace.Path)" ignoriert -->
+        <member name="M:CsPotrace.Potrace.findpath(System.Boolean[0:,0:],CsPotrace.Potrace.iPoint)">
+            <summary>
+            Compute a path in the binary matrix.
+            Start path at the point (x0,x1), which must be an upper left corner
+            of the path. Also compute the area enclosed by the path. Return a
+            new path_t object, or NULL on error (note that a legitimate path
+            cannot have length 0). 
+            We omit turnpolicies and sign
+            </summary>
+            <param name="Matrix">Binary Matrix</param>
+            <returns></returns>
+        </member>
+        <member name="M:CsPotrace.Potrace.calc_sums(CsPotrace.Potrace.Path)">
+             <summary>
+            Preparation: fill in the sum* fields of a path (used for later
+            rapid summing). 
+             </summary>
+             <param name="pp">Path for which the preparation will be done</param>
+             <returns></returns>
+        </member>
+        <member name="M:CsPotrace.Potrace.potrace_trace(System.Boolean[0:,0:],System.Collections.ArrayList)">
+            <summary>
+            It is the main function, which yields the curveinformations related to a given binary bitmap.
+            It fills the ArrayList ListOfCurveArrays with curvepathes. 
+            Each of this pathes is an list of connecting curves.
+            
+            Example:
+            <pre>
+            Call first:
+                ArrayList ListOfCurveArrays = new ArrayList();
+                potrace_trace(bm, ListOfCurveArrays);
+            Paint the result:
+               GraphicsPath gp = new GraphicsPath();
+                for (int i = 0; i &lt; ListOfCurveArrays.Count; i++)
+               {
+                   ArrayList CurveArray = (ArrayList)ListOfCurveArrays[i];
+                   GraphicsPath Contour=null;
+                   GraphicsPath Hole = null;
+                   GraphicsPath Current=null;
+                   for (int j = 0; j &lt; CurveArray.Count; j++)
+                   {
+                       if (j == 0)
+                       {
+                           Contour = new GraphicsPath();
+                           Current = Contour;
+                       }
+                       else
+                       {
+                           Hole = new GraphicsPath();
+                           Current = Hole;
+                        }
+                       Potrace.Curve[] Curves = (Curve[])CurveArray[j];
+                       for (int k = 0; k &lt; Curves.Length; k++)
+                       {
+                           if (Curves[k].Kind == Potrace.CurveKind.Bezier)
+                               Current.AddBezier((float)Curves[k].A.x, (float)Curves[k].A.y, (float)Curves[k].ControlPointA.x, (float)Curves[k].ControlPoint.y,
+                                                 (float)Curves[k].ControlPointB.x, (float)Curves[k].ControlPointB.y, (float)Curves[k].B.x, (float)Curves[k].B.y);
+                           else
+                               Current.AddLine((float)Curves[k].A.x, (float)Curves[k].A.y, (float)Curves[k].B.x, (float)Curves[k].B.y);
+                       }
+                       if (j > 0) Contour.AddPath(Hole, false);
+                   }
+                   gp.AddPath(Contour, false);
+               }
+                // any Graphic g
+               Graphics g = CreateGraphics();
+                // Paint the fill
+               g.FillPath(Brushes.Black, gp);
+                // Paint the border
+               g.DrawPath(Pens.Red,gp);
+            </pre>
+            </summary>
+            <param name="ListOfCurveArrays">A list in which the curveinformations will be stored.</param>
+            
+            <param name="bm">A binary bitmap, which holds the pixelinformation about the image.</param>
+        </member>
+        <member name="M:CsPotrace.Potrace.bm_to_pathlist(System.Boolean[0:,0:],System.Collections.ArrayList)">
+            <summary>
+            Decompose the given bitmap into paths. Returns a linked list of
+            Path objects with the fields len, pt, area filled
+            </summary>
+            <param name="bm">A binary bitmap which holds the imageinformations.</param>
+            <param name="plistp">List of Path objects</param>
+        </member>
+        <member name="T:CsPotrace.Potrace.CurveKind">
+            <summary>
+            Kind of Curve : Line or Bezier
+            </summary>
+        </member>
+        <member name="T:CsPotrace.Potrace.Curve">
+            <summary>
+            Holds the information about der produced curves
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.Curve.Kind">
+            <summary>
+            Bezier or Line
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.Curve.A">
+            <summary>
+            Startpoint
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.Curve.ControlPointA">
+            <summary>
+            ControlPoint
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.Curve.ControlPointB">
+            <summary>
+            ControlPoint
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.Curve.B">
+            <summary>
+            Endpoint
+            </summary>
+        </member>
+        <member name="M:CsPotrace.Potrace.Curve.#ctor(CsPotrace.Potrace.CurveKind,CsPotrace.Potrace.dPoint,CsPotrace.Potrace.dPoint,CsPotrace.Potrace.dPoint,CsPotrace.Potrace.dPoint)">
+            <summary>
+            Creates a curve
+            </summary>
+            <param name="Kind"></param>
+            <param name="A">Startpoint</param>
+            <param name="ControlPointA">Controlpoint</param>
+            <param name="ControlPointB">Controlpoint</param>
+            <param name="B">Endpoint</param>
+        </member>
+        <member name="T:CsPotrace.Potrace.dPoint">
+            <summary>
+            Holds the coordinates of a Point
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.dPoint.x">
+            <summary>
+            x-coordinate
+            </summary>
+        </member>
+        <member name="F:CsPotrace.Potrace.dPoint.y">
+            <summary>
+            y-coordinate
+            </summary>
+        </member>
+        <member name="M:CsPotrace.Potrace.dPoint.#ctor(System.Double,System.Double)">
+            <summary>
+            Creates a point
+            </summary>
+            <param name="x">x-coordinate</param>
+            <param name="y">y-coordinate</param>
+        </member>
+        <!-- Nicht wohlgeformter XML-Kommentar wurde für den Member "T:CsPotrace.Potrace.MonotonInterval" ignoriert -->
+    </members>
+</doc>
