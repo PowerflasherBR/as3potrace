@@ -1,12 +1,7 @@
 ﻿package 
 {
-	import com.powerflasher.as3potrace.POTrace;
-	import flash.filters.BitmapFilterQuality;
-	import flash.filters.BlurFilter;
-	import flash.filters.ColorMatrixFilter;
-	import flash.geom.Point;
-	import flash.filters.BitmapFilter;
 	import com.bit101.components.PushButton;
+	import com.powerflasher.as3potrace.POTrace;
 
 	import flash.display.Bitmap;
 	import flash.display.BitmapData;
@@ -17,25 +12,52 @@
 	import flash.display.StageAlign;
 	import flash.display.StageScaleMode;
 	import flash.events.Event;
+	import flash.filters.BitmapFilter;
+	import flash.filters.BitmapFilterQuality;
+	import flash.filters.BlurFilter;
+	import flash.filters.ColorMatrixFilter;
 	import flash.geom.Matrix;
+	import flash.geom.Point;
 	import flash.net.FileFilter;
 	import flash.net.FileReference;
 	import flash.utils.ByteArray;
 
+	[SWF(backgroundColor="#FFFFFF", frameRate="31", width="640", height="480")]
+	
 	public class Main extends Sprite
 	{
+		[Embed(source="../bitmaps/3-2.png")]
+		public var Simple_3_2:Class;
+		[Embed(source="../bitmaps/3-3.png")]
+		public var Simple_3_3:Class;
+		[Embed(source="../bitmaps/pot1.png")]
+		public var Pot1:Class;
+		//[Embed(source="../bitmaps/pot2.png")]
+		//public var Pot2:Class;
+		
 		public function Main()
 		{
 			stage.align = StageAlign.TOP_LEFT;
-			stage.scaleMode = StageScaleMode.NO_SCALE
+			stage.scaleMode = StageScaleMode.NO_SCALE;
 			addChild(new PushButton(this, 10, 10, "Load Image", function():void {
 				var ref:FileReference = new FileReference();
 				ref.addEventListener(Event.SELECT, function(e:Event):void { ref.load(); });
 				ref.addEventListener(Event.COMPLETE, function(e:Event):void { loadBytes(ref.data); });
 				ref.browse([new FileFilter("PNG (*.png)", "*.png"), new FileFilter("JPG (*.jpg)", "*.jpg"), new FileFilter("GIF (*.gif)", "*.gif")]);
 			}));
+			addChild(new PushButton(this, 120, 10, "3-2.png", function():void { traceImage(Simple_3_2); }));
+			addChild(new PushButton(this, 230, 10, "3-3.png", function():void { traceImage(Simple_3_3); }));
+			addChild(new PushButton(this, 340, 10, "pot1.png", function():void { traceImage(Pot1); }));
+			//addChild(new PushButton(this, 450, 10, "pot2.png", function():void { traceImage(Pot2); }));
 		}
 		
+		protected function traceImage(ImageClass:Class):void
+		{
+			var bm:Bitmap = new ImageClass();
+			var potrace:POTrace = new POTrace();
+			potrace.potrace_trace(bm.bitmapData);
+		}
+
 		protected function loadBytes(image:ByteArray):void
 		{
 			var loader:Loader = new Loader();
@@ -68,7 +90,7 @@
 			addChild(bm);
 			
 			var potrace:POTrace = new POTrace();
-			var shapes:Array = potrace.traceBitmap(bmd2);
+			var shapes:Array = potrace.potrace_trace(bmd2);
 			trace(shapes);
 		}
 		

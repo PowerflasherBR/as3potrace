@@ -4,17 +4,16 @@ package com.powerflasher.as3potrace.geom
 	{
 		public var area:int;
 		public var monotonIntervals:Array;
-		public var pt:Array;
-		public var lon:Array;
-		public var sums:Array;
-		public var po:Array;
+		public var pt:Vector.<PointInt>;
+		public var lon:Vector.<int>;
+		public var sums:Vector.<SumStruct>;
+		public var po:Vector.<int>;
 		public var curves:PrivCurve;
 		public var optimizedCurves:PrivCurve;
 		public var fCurves:PrivCurve;
 		
 		public function Path()
 		{
-			
 		}
 	}
 }

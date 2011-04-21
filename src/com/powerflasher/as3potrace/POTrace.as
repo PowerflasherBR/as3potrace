@@ -1,9 +1,11 @@
 package com.powerflasher.as3potrace
 {
 	import com.powerflasher.as3potrace.geom.Direction;
+	import com.powerflasher.as3potrace.geom.MonotonInterval;
 	import com.powerflasher.as3potrace.geom.Path;
-	import flash.geom.Point;
+	import com.powerflasher.as3potrace.geom.PointInt;
 	import flash.display.BitmapData;
+	import flash.geom.Point;
 	
 	public class POTrace
 	{
@@ -13,21 +15,30 @@ package com.powerflasher.as3potrace
 		{
 		}
 		
-		public function traceBitmap(bitmapData:BitmapData):Array
+		/*
+		 * Main function
+		 * Yields the curve informations related to a given binary bitmap.
+		 * Returns an array of curvepaths. 
+		 * Each of this paths is a list of connecting curves.
+		 */
+		public function potrace_trace(bitmapData:BitmapData):Array
 		{
-			var plist:Array = bm_to_pathlist(bitmapData);
-	
+			var plist:Array;
+			plist = bm_to_pathlist(bitmapData);
 			plist = processPath(plist);
-			
 			return PathList_to_ListOfCurveArrays(plist);
 		}
-
+		
+		/*
+		 * Decompose the given bitmap into paths. Returns a linked list of
+		 * Path objects with the fields len, pt, area filled
+		 */
 		private function bm_to_pathlist(bitmapData:BitmapData):Array
 		{
-			var pt:Point;
 			var plist:Array;
-            while ((pt = findNext(bitmapData)) != null) {
-                getContur(bitmapData, pt, plist);
+			var pt:PointInt;
+            while ((pt = find_next(bitmapData)) != null) {
+                get_contur(bitmapData, pt, plist);
                 break;
             }
             return plist;
@@ -37,7 +48,7 @@ package com.powerflasher.as3potrace
 		 * Searches a point such that source[x, y] = true and source[x+1, y] = false.
 		 * If this not exists, null will be returned, else the result is Point(x, y).
 		 */
-		private function findNext(bitmapData:BitmapData):Point
+		private function find_next(bitmapData:BitmapData):PointInt
 		{
 			var x:int;
 			var y:int;
@@ -45,16 +56,16 @@ package com.powerflasher.as3potrace
 				for (x = 0; x < bitmapData.width - 1; x++) {
 					if(bitmapData.getPixel(x + 1, y) == 0) {
 						// Black found
-						return new Point(x, y);
+						return new PointInt(x, y);
 					}
 				}
 			}
 			return null;
 		}
 
-		private function getContur(bitmapData:BitmapData, pt:Point, plist:Array):void
+		private function get_contur(bitmapData:BitmapData, pt:PointInt, plist:Array):void
 		{
-			var contur:Path = findPath(bitmapData, pt);
+			var contur:Path = find_path(bitmapData, pt);
 		}
 
 		/*
@@ -67,27 +78,162 @@ package com.powerflasher.as3potrace
 		 * 
 		 * We omit turnpolicies and sign
 		 */
-		private function findPath(bitmapData:BitmapData, start:Point):Path
+		private function find_path(bitmapData:BitmapData, start:PointInt):Path
 		{
-			var l:Array = [];
+			var l:Vector.<PointInt> = new Vector.<PointInt>();
+			var p:PointInt = start.clone();
 			var dir:uint = Direction.NORTH;
-			var x:int = start.x;
-			var y:int = start.y;
 			var area:int = 0;
-			var diry:int = -1;
 
 			do
 			{
-				// area += x * diry;
-				l.push(new Point(x, y));
-                var _y:int = y;
-                findNextTrace(Matrix, ref x, ref y, ref Dir);
-                diry = _y - y;
-                area += x * diry;
+				l.push(p.clone());
+                var _y:int = p.y;
+                dir = find_next_trace(bitmapData, p, dir);
+                area += p.x * (_y - p.y);
             }
-            while ((x != start.x) || (y != start.y));
+            while ((p.x != start.x) || (p.y != start.y));
 			
-			return null;
+			if(l.length == 0) {
+				return null;
+			}
+			
+			var result:Path = new Path();
+			result.pt = new Vector.<PointInt>(l.length);
+			result.area = area;
+
+			for (var i:int = 0; i < l.length; i++) {
+				result.pt[i] = l[i];
+			}
+			
+			// Shift 1 to be compatible with Potrace
+			result.pt.unshift(result.pt.pop());
+			
+			result.monotonIntervals = get_monoton_intervals(result.pt);
+			
+			return result;
+		}
+
+		private function get_monoton_intervals(pt:Vector.<PointInt>):Array
+		{
+			var result:Array = [];
+			var n:uint = pt.length;
+			if(n == 0) {
+				return result;
+			}
+			
+			var intervals:Vector.<MonotonInterval> = new Vector.<MonotonInterval>();
+			
+			// Start with Strong Monoton (Pts[i].y < Pts[i+1].y) or (Pts[i].y > Pts[i+1].y)
+			var firstStrongMonoton:int = 0;
+			while(pt[firstStrongMonoton].y == pt[firstStrongMonoton + 1].y) {
+				firstStrongMonoton++;
+			}
+
+			var i:int = firstStrongMonoton;
+			var up:Boolean = (pt[firstStrongMonoton].y < pt[firstStrongMonoton + 1].y);
+			var interval:MonotonInterval = new MonotonInterval(up, firstStrongMonoton, firstStrongMonoton);
+			intervals.push(interval);
+			
+			do
+			{
+				if ((pt[i].y == pt[(i + 1) % n].y) || (up == (pt[i].y < pt[(i + 1) % n].y))) {
+					interval.to = i;
+				} else {
+					up = (pt[i].y < pt[(i + 1) % n].y);
+					interval = new MonotonInterval(up, i, i);
+					intervals.push(interval);
+				}
+				i = (i + 1) % n;
+			}
+			while(i != firstStrongMonoton);
+			
+			if (intervals.length / 2 * 2 != intervals.length) {
+				var last:MonotonInterval = intervals.pop();
+				intervals[0].from = last.from;
+			}
+			
+			while(intervals.length > 0)
+			{
+				i = 0;
+				var m:MonotonInterval = intervals.shift();
+				while((i < result.length) && (pt[m.min()].y > pt[MonotonInterval(result[i]).min()].y)) {
+					i++;
+				}
+				while((i < result.length) && (pt[m.min()].y == pt[MonotonInterval(result[i]).min()].y) && (pt[m.min()].x > pt[MonotonInterval(result[i]).min()].x)) {
+					i++;
+				}
+				result.splice(i, 0, m);
+			}
+			
+			return result;
+		}
+
+		private function find_next_trace(bitmapData:BitmapData, p:PointInt, dir:uint):uint
+		{
+			switch(dir)
+			{
+				case Direction.WEST:
+					if(bitmapData.getPixel(p.x + 1, p.y + 1) == 0) {
+						dir = Direction.NORTH;
+						p.y++;
+					} else {
+						if(bitmapData.getPixel(p.x + 1, p.y) == 0) {
+							dir = Direction.WEST;
+							p.x++;
+						} else {
+							dir = Direction.SOUTH;
+							p.y--;
+						}
+					}
+					break;
+					
+				case Direction.SOUTH:
+					if(bitmapData.getPixel(p.x + 1, p.y) == 0) {
+						dir = Direction.WEST;
+						p.x++;
+					} else {
+						if(bitmapData.getPixel(p.x, p.y) == 0) {
+							dir = Direction.SOUTH;
+							p.y--;
+						} else {
+							dir = Direction.EAST;
+							p.x--;
+						}
+					}
+					break;
+					
+				case Direction.EAST:
+					if(bitmapData.getPixel(p.x, p.y) == 0) {
+						dir = Direction.SOUTH;
+						p.y--;
+					} else {
+						if(bitmapData.getPixel(p.x, p.y + 1) == 0) {
+							dir = Direction.EAST;
+							p.x--;
+						} else {
+							dir = Direction.NORTH;
+							p.y++;
+						}
+					}
+					break;
+					
+				case Direction.NORTH:
+					if(bitmapData.getPixel(p.x, p.y + 1) == 0) {
+						dir = Direction.EAST;
+						p.x--;
+					} else {
+						if(bitmapData.getPixel(p.x + 1, p.y + 1) == 0) {
+							dir = Direction.NORTH;
+							p.y++;
+						} else {
+							dir = Direction.WEST;
+							p.x++;
+						}
+					}
+					break;
+			}
+			return dir;
 		}
 
 		private function processPath(plist:Array):Array
