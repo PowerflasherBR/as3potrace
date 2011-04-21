@@ -4,12 +4,13 @@ package com.powerflasher.as3potrace
 	import com.powerflasher.as3potrace.geom.MonotonInterval;
 	import com.powerflasher.as3potrace.geom.Path;
 	import com.powerflasher.as3potrace.geom.PointInt;
+
 	import flash.display.BitmapData;
-	import flash.geom.Point;
 	
 	public class POTrace
 	{
-		protected var bmd:BitmapData;
+		protected var bmWidth:uint;
+		protected var bmHeight:uint;
 		
 		public function POTrace()
 		{
@@ -23,8 +24,23 @@ package com.powerflasher.as3potrace
 		 */
 		public function potrace_trace(bitmapData:BitmapData):Array
 		{
+			bmWidth = bitmapData.width;
+			bmHeight = bitmapData.height;
+			
+			var pos:uint = 0;
+			var bitmapDataVecTmp:Vector.<uint> = bitmapData.getVector(bitmapData.rect);
+			var bitmapDataMatrix:Vector.<Vector.<uint>> = new Vector.<Vector.<uint>>(bmHeight);
+			for (var i:int = 0; i < bmHeight; i++) {
+				var row:Vector.<uint> = bitmapDataVecTmp.slice(pos, pos + bmWidth);
+				for (var j:int = 0; j < row.length; j++) {
+					row[j] &= 0xffffff;
+				}
+				bitmapDataMatrix[i] = row;
+				pos += bmWidth;
+			}
+
 			var plist:Array;
-			plist = bm_to_pathlist(bitmapData);
+			plist = bm_to_pathlist(bitmapDataMatrix);
 			plist = processPath(plist);
 			return PathList_to_ListOfCurveArrays(plist);
 		}
@@ -33,12 +49,12 @@ package com.powerflasher.as3potrace
 		 * Decompose the given bitmap into paths. Returns a linked list of
 		 * Path objects with the fields len, pt, area filled
 		 */
-		private function bm_to_pathlist(bitmapData:BitmapData):Array
+		private function bm_to_pathlist(bitmapDataMatrix:Vector.<Vector.<uint>>):Array
 		{
 			var plist:Array;
 			var pt:PointInt;
-            while ((pt = find_next(bitmapData)) != null) {
-                get_contur(bitmapData, pt, plist);
+            while ((pt = find_next(bitmapDataMatrix)) != null) {
+                get_contur(bitmapDataMatrix, pt, plist);
                 break;
             }
             return plist;
@@ -48,13 +64,13 @@ package com.powerflasher.as3potrace
 		 * Searches a point such that source[x, y] = true and source[x+1, y] = false.
 		 * If this not exists, null will be returned, else the result is Point(x, y).
 		 */
-		private function find_next(bitmapData:BitmapData):PointInt
+		private function find_next(bitmapDataMatrix:Vector.<Vector.<uint>>):PointInt
 		{
 			var x:int;
 			var y:int;
-			for (y = 1; y < bitmapData.height - 1; y++) {
-				for (x = 0; x < bitmapData.width - 1; x++) {
-					if(bitmapData.getPixel(x + 1, y) == 0) {
+			for (y = 1; y < bmHeight - 1; y++) {
+				for (x = 0; x < bmWidth - 1; x++) {
+					if(bitmapDataMatrix[y][x + 1] == 0) {
 						// Black found
 						return new PointInt(x, y);
 					}
@@ -63,9 +79,9 @@ package com.powerflasher.as3potrace
 			return null;
 		}
 
-		private function get_contur(bitmapData:BitmapData, pt:PointInt, plist:Array):void
+		private function get_contur(bitmapDataMatrix:Vector.<Vector.<uint>>, pt:PointInt, plist:Array):void
 		{
-			var contur:Path = find_path(bitmapData, pt);
+			var contur:Path = find_path(bitmapDataMatrix, pt);
 		}
 
 		/*
@@ -78,7 +94,7 @@ package com.powerflasher.as3potrace
 		 * 
 		 * We omit turnpolicies and sign
 		 */
-		private function find_path(bitmapData:BitmapData, start:PointInt):Path
+		private function find_path(bitmapDataMatrix:Vector.<Vector.<uint>>, start:PointInt):Path
 		{
 			var l:Vector.<PointInt> = new Vector.<PointInt>();
 			var p:PointInt = start.clone();
@@ -89,7 +105,7 @@ package com.powerflasher.as3potrace
 			{
 				l.push(p.clone());
                 var _y:int = p.y;
-                dir = find_next_trace(bitmapData, p, dir);
+                dir = find_next_trace(bitmapDataMatrix, p, dir);
                 area += p.x * (_y - p.y);
             }
             while ((p.x != start.x) || (p.y != start.y));
@@ -99,9 +115,8 @@ package com.powerflasher.as3potrace
 			}
 			
 			var result:Path = new Path();
-			result.pt = new Vector.<PointInt>(l.length);
 			result.area = area;
-
+			result.pt = new Vector.<PointInt>(l.length);
 			for (var i:int = 0; i < l.length; i++) {
 				result.pt[i] = l[i];
 			}
@@ -137,14 +152,15 @@ package com.powerflasher.as3potrace
 			
 			do
 			{
-				if ((pt[i].y == pt[(i + 1) % n].y) || (up == (pt[i].y < pt[(i + 1) % n].y))) {
+				var i1n:int = (i + 1) % n; 
+				if ((pt[i].y == pt[i1n].y) || (up == (pt[i].y < pt[i1n].y))) {
 					interval.to = i;
 				} else {
-					up = (pt[i].y < pt[(i + 1) % n].y);
+					up = (pt[i].y < pt[i1n].y);
 					interval = new MonotonInterval(up, i, i);
 					intervals.push(interval);
 				}
-				i = (i + 1) % n;
+				i = i1n;
 			}
 			while(i != firstStrongMonoton);
 			
@@ -169,16 +185,16 @@ package com.powerflasher.as3potrace
 			return result;
 		}
 
-		private function find_next_trace(bitmapData:BitmapData, p:PointInt, dir:uint):uint
+		private function find_next_trace(bitmapDataMatrix:Vector.<Vector.<uint>>, p:PointInt, dir:uint):uint
 		{
 			switch(dir)
 			{
 				case Direction.WEST:
-					if(bitmapData.getPixel(p.x + 1, p.y + 1) == 0) {
+					if(bitmapDataMatrix[p.y + 1][p.x + 1] == 0) {
 						dir = Direction.NORTH;
 						p.y++;
 					} else {
-						if(bitmapData.getPixel(p.x + 1, p.y) == 0) {
+						if(bitmapDataMatrix[p.y][p.x + 1] == 0) {
 							dir = Direction.WEST;
 							p.x++;
 						} else {
@@ -189,11 +205,11 @@ package com.powerflasher.as3potrace
 					break;
 					
 				case Direction.SOUTH:
-					if(bitmapData.getPixel(p.x + 1, p.y) == 0) {
+					if(bitmapDataMatrix[p.y][p.x + 1] == 0) {
 						dir = Direction.WEST;
 						p.x++;
 					} else {
-						if(bitmapData.getPixel(p.x, p.y) == 0) {
+						if(bitmapDataMatrix[p.y][p.x] == 0) {
 							dir = Direction.SOUTH;
 							p.y--;
 						} else {
@@ -204,11 +220,11 @@ package com.powerflasher.as3potrace
 					break;
 					
 				case Direction.EAST:
-					if(bitmapData.getPixel(p.x, p.y) == 0) {
+					if(bitmapDataMatrix[p.y][p.x] == 0) {
 						dir = Direction.SOUTH;
 						p.y--;
 					} else {
-						if(bitmapData.getPixel(p.x, p.y + 1) == 0) {
+						if(bitmapDataMatrix[p.y + 1][p.x] == 0) {
 							dir = Direction.EAST;
 							p.x--;
 						} else {
@@ -219,11 +235,11 @@ package com.powerflasher.as3potrace
 					break;
 					
 				case Direction.NORTH:
-					if(bitmapData.getPixel(p.x, p.y + 1) == 0) {
+					if(bitmapDataMatrix[p.y + 1][p.x] == 0) {
 						dir = Direction.EAST;
 						p.x--;
 					} else {
-						if(bitmapData.getPixel(p.x + 1, p.y + 1) == 0) {
+						if(bitmapDataMatrix[p.y + 1][p.x + 1] == 0) {
 							dir = Direction.NORTH;
 							p.y++;
 						} else {
