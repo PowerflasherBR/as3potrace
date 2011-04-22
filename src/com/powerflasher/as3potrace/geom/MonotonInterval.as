@@ -1,6 +1,5 @@
 package com.powerflasher.as3potrace.geom
 {
-	import com.powerflasher.as3potrace.math.mod;
 	public class MonotonInterval
 	{
 		public var increasing:Boolean;
@@ -43,6 +42,11 @@ package com.powerflasher.as3potrace.geom
 		public function maxY(pts:Vector.<PointInt>):int
 		{
 			return pts[max()].y;
+		}
+		
+		private function mod(a:int, n:int):int
+		{
+			return (a >= n) ? a % n : ((a >= 0) ? a : n - 1 - (-1 - a) % n);
 		}
 	}
 }
