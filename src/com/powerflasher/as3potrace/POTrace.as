@@ -4,9 +4,11 @@ package com.powerflasher.as3potrace
 	import com.powerflasher.as3potrace.geom.MonotonInterval;
 	import com.powerflasher.as3potrace.geom.Path;
 	import com.powerflasher.as3potrace.geom.PointInt;
+	import com.powerflasher.as3potrace.geom.PrivCurve;
 	import com.powerflasher.as3potrace.geom.SumStruct;
 
 	import flash.display.BitmapData;
+	import flash.geom.Point;
 	
 	public class POTrace
 	{
@@ -42,9 +44,8 @@ package com.powerflasher.as3potrace
 				pos += bmWidth;
 			}
 
-			var plist:Array;
-			plist = bm_to_pathlist(bitmapDataMatrix);
-			plist = process_path(plist);
+			var plist:Array = bm_to_pathlist(bitmapDataMatrix);
+			process_path(plist);
 			return PathList_to_ListOfCurveArrays(plist);
 		}
 		
@@ -443,7 +444,7 @@ package com.powerflasher.as3potrace
 			return dir;
 		}
 
-		private function process_path(plists:Array):Array
+		private function process_path(plists:Array):void
 		{
 			// call downstream function with each path
 			for (var j:int = 0; j < plists.length; j++) {
@@ -453,14 +454,288 @@ package com.powerflasher.as3potrace
 					calc_sums(path);
 					calc_lon(path);
 					bestpolygon(path);
-					//adjust_vertices(path);
+					adjust_vertices(path);
 				}
 			}
-			return null;
 		}
 
 		private function adjust_vertices(path:Path):void
 		{
+			var pt:Vector.<PointInt> = path.pt;
+			var po:Vector.<int> = path.po;
+			
+			var n:int = pt.length;
+			var m:int = po.length;
+
+			var x0:int = pt[0].x;
+			var y0:int = pt[0].y;
+			
+			var i:int;
+			var j:int;
+			var k:int;
+			var l:int;
+
+			var d:Number;
+			var v:Vector.<Number> = new Vector.<Number>(3);
+			var q:Vector.<Vector.<Vector.<Number>>> = new Vector.<Vector.<Vector.<Number>>>(m);
+			
+			var ctr:Vector.<Point> = new Vector.<Point>(m);
+			var dir:Vector.<Point> = new Vector.<Point>(m);
+			
+			for (i = 0; i < m; i++) {
+				q[i] = new Vector.<Vector.<Number>>(3);
+				for (j = 0; j < 3; j++) {
+					q[i][j] = new Vector.<Number>(3);
+				}
+				ctr[i] = new Point();
+				dir[i] = new Point();
+			}
+			
+			var s:Point = new Point();
+			
+			path.curves = new PrivCurve(m);
+			
+			// calculate "optimal" point-slope representation for each line segment
+			for (i = 0; i < m; i++) {
+				j = po[mod(i + 1, m)];
+				j = mod(j - po[i], n) + po[i];
+				pointslope(path, po[i], j, ctr[i], dir[i]);
+			}
+			
+			// represent each line segment as a singular quadratic form;
+			// the distance of a point (x,y) from the line segment will be
+			// (x,y,1)Q(x,y,1)^t, where Q=q[i]
+			for (i = 0; i < m; i++) {
+				d = dir[i].x * dir[i].x + dir[i].y * dir[i].y;
+				if (d == 0) {
+					for (j = 0; j < 3; j++) {
+						for (k = 0; k < 3; k++) {
+							q[i][j][k] = 0;
+						}
+					}
+				} else {
+					v[0] = dir[i].y;
+					v[1] = -dir[i].x;
+					v[2] = -v[1] * ctr[i].y - v[0] * ctr[i].x;
+					for (l = 0; l < 3; l++) {
+						for (k = 0; k < 3; k++) {
+							q[i][l][k] = v[l] * v[k] / d;
+						}
+					}
+				}
+			}
+			
+			// now calculate the "intersections" of consecutive segments.
+			// Instead of using the actual intersection, we find the point
+			// within a given unit square which minimizes the square distance to
+			// the two lines.
+			for (i = 0; i < m; i++)
+			{
+				var Q:Vector.<Vector.<Number>> = new Vector.<Vector.<Number>>(3);
+				var w:Point = new Point();
+				var dx:Number;
+				var dy:Number;
+				var det:Number;
+				var min:Number; // minimum for minimum of quad. form
+				var cand:Number; // candidate for minimum of quad. form
+				var xmin:Number; // coordinate of minimum
+				var ymin:Number; // coordinate of minimum
+				var z:int;
+
+				for (j = 0; j < 3; j++) {
+					Q[j] = new Vector.<Number>(3);
+				}
+				
+				// let s be the vertex, in coordinates relative to x0/y0
+				s.x = pt[po[i]].x - x0;
+				s.y = pt[po[i]].y - y0;
+				
+				// intersect segments i-1 and i
+				j = mod(i - 1, m);
+				
+				// add quadratic forms
+				for (l = 0; l < 3; l++) {
+					for (k = 0; k < 3; k++) {
+						Q[l][k] = q[j][l][k] + q[i][l][k];
+					}
+				}
+				
+				while (true)
+				{
+					/* minimize the quadratic form Q on the unit square */
+					/* find intersection */
+					det = Q[0][0] * Q[1][1] - Q[0][1] * Q[1][0];
+					if (det != 0) {
+						w.x = (-Q[0][2] * Q[1][1] + Q[1][2] * Q[0][1]) / det;
+						w.y = (Q[0][2] * Q[1][0] - Q[1][2] * Q[0][0]) / det;
+						break;
+					}
+					
+					// matrix is singular - lines are parallel. Add another,
+					// orthogonal axis, through the center of the unit square
+					if (Q[0][0] > Q[1][1]) {
+						v[0] = -Q[0][1];
+						v[1] = Q[0][0];
+					} else if (Q[1][1] != 0) {
+						v[0] = -Q[1][1];
+						v[1] = Q[1][0];
+					} else {
+						v[0] = 1;
+						v[1] = 0;
+					}
+					
+					d = v[0] * v[0] + v[1] * v[1];
+					v[2] = -v[1] * s.y - v[0] * s.x;
+					for (l = 0; l < 3; l++) {
+						for (k = 0; k < 3; k++) {
+							Q[l][k] += v[l] * v[k] / d;
+						}
+					}
+				}
+				
+				dx = Math.abs(w.x - s.x);
+				dy = Math.abs(w.y - s.y);
+				if (dx <= 0.5 && dy <= 0.5) {
+					// - 1 because we have a additional border set to the bitmap
+					path.curves.vertex[i] = new Point(w.x + x0, w.y + y0);
+					continue;
+				}
+				
+				// the minimum was not in the unit square;
+				// now minimize quadratic on boundary of square
+				min = quadform(Q, s);
+				xmin = s.x;
+				ymin = s.y;
+				
+				if (Q[0][0] != 0) {
+					for (z = 0; z < 2; z++) {
+						// value of the y-coordinate
+						w.y = s.y - 0.5 + z;
+						w.x = -(Q[0][1] * w.y + Q[0][2]) / Q[0][0];
+						dx = Math.abs(w.x - s.x);
+						cand = quadform(Q, w);
+						if (dx <= 0.5 && cand < min) {
+							min = cand;
+							xmin = w.x;
+							ymin = w.y;
+						}
+					}
+				}
+				
+				if (Q[1][1] != 0) {
+					for (z = 0; z < 2; z++)
+					{
+						// value of the x-coordinate
+						w.x = s.x - 0.5 + z;
+						w.y = -(Q[1][0] * w.x + Q[1][2]) / Q[1][1];
+						dy = Math.abs(w.y - s.y);
+						cand = quadform(Q, w);
+						if (dy <= 0.5 && cand < min) {
+							min = cand;
+							xmin = w.x;
+							ymin = w.y;
+						}
+					}
+				}
+				
+				// check four corners
+				for (l = 0; l < 2; l++) {
+					for (k = 0; k < 2; k++) {
+						w.x = s.x - 0.5 + l;
+						w.y = s.y - 0.5 + k;
+						cand = quadform(Q, w);
+						if (cand < min) {
+							min = cand;
+							xmin = w.x;
+							ymin = w.y;
+						}
+					}
+				}
+				
+				// - 1 because we have a additional border set to the bitmap
+				path.curves.vertex[i] = new Point(xmin + x0 - 1, ymin + y0 - 1);
+				continue;
+			}
+		}
+
+		private function quadform(Q:Vector.<Vector.<Number>>, w:Point):Number
+		{
+			var sum:Number = 0;
+			var v:Vector.<Number> = new Vector.<Number>(3);
+			v[0] = w.x;
+			v[1] = w.y;
+			v[2] = 1;
+			for (var i:int = 0; i < 3; i++) {
+				for (var j:int = 0; j < 3; j++) {
+					sum += v[i] * Q[i][j] * v[j];
+				}
+			}
+			return sum;
+		}
+
+		private function pointslope(path:Path, i:int, j:int, ctr:Point, dir:Point):void
+		{
+			// assume i < j
+			var n:int = path.pt.length;
+			var sums:Vector.<SumStruct> = path.sums;
+			var l:Number;
+			var r:int = 0; // rotations from i to j
+			
+			while (j >= n) {
+				j -= n;
+				r++;
+			}
+			while (i >= n) {
+			    i -= n;
+			    r--;
+			}
+			while (j < 0) {
+			    j += n;
+			    r--;
+			}
+			while (i < 0) {
+			    i += n;
+			    r++;
+			}
+			
+			var x:Number = sums[j + 1].x - sums[i].x + r * sums[n].x;
+			var y:Number = sums[j + 1].y - sums[i].y + r * sums[n].y;
+			var x2:Number = sums[j + 1].x2 - sums[i].x2 + r * sums[n].x2;
+			var xy:Number = sums[j + 1].xy - sums[i].xy + r * sums[n].xy;
+			var y2:Number = sums[j + 1].y2 - sums[i].y2 + r * sums[n].y2;
+			var k:Number = j + 1 - i + r * n;
+			
+			ctr.x = x / k;
+			ctr.y = y / k;
+			
+			var a:Number = (x2 - x * x / k) / k;
+			var b:Number = (xy - x * y / k) / k;
+			var c:Number = (y2 - y * y / k) / k;
+			
+			var lambda2:Number = (a + c + Math.sqrt((a - c) * (a - c) + 4 * b * b)) / 2; // larger e.value
+			
+			// now find e.vector for lambda2
+			a -= lambda2;
+			c -= lambda2;
+			
+			if (Math.abs(a) >= Math.abs(c)) {
+				l = Math.sqrt(a * a + b * b);
+				if (l != 0) {
+					dir.x = -b / l;
+					dir.y = a / l;
+				}
+			} else {
+				l = Math.sqrt(c * c + b * b);
+				if (l != 0) {
+					dir.x = -c / l;
+					dir.y = b / l;
+				}
+			}
+			if (l == 0) {
+				// sometimes this can happen when k=4:
+				// the two eigenvalues coincide
+				dir.x = dir.y = 0;
+			}
 		}
 
 		/*
