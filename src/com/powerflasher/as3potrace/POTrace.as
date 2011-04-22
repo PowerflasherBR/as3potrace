@@ -97,10 +97,11 @@ package com.powerflasher.as3potrace
 			var mis:Array = path.monotonIntervals;
 			var mi:MonotonInterval = mis[0] as MonotonInterval;
 			mi.resetCurrentId(n);
-			mi.currentId = mi.min();
 			
 			var y:int = path.pt[mi.currentId].y;
 			var currentIntervals:Array = [mi];
+
+			mi.currentId = mi.min();
 
 			while ((mis.length > i + 1) && (MonotonInterval(mis[i + 1]).minY(path.pt) == y))
 			{
@@ -120,9 +121,9 @@ package com.powerflasher.as3potrace
 					var x2:int = path.pt[MonotonInterval(currentIntervals[k + 1]).currentId].x;
 					for (var x:int = x1; x <= x2; x++) {
 						// This is the only difference to xor_path()
-						// TODO: Maybe it would be a good idea to merge these two methods.
+						// TODO: Maybe it would be a good idea to merge these two methods?
 						if (bitmapDataMatrix[y][x] == 0) {
-							return new PointInt(x, y);
+							return new PointInt(x - 1, y);
 						}
 					}
 					k++;
@@ -167,6 +168,9 @@ package com.powerflasher.as3potrace
 		{
 			var polyPath:Array = [];
 			
+			dump_bitmap(bitmapDataMatrix);
+			trace(pt);
+			
 			var contour:Path = find_path(bitmapDataMatrix, pt);
 			xor_path(bitmapDataMatrix, contour);
 
@@ -179,6 +183,9 @@ package com.powerflasher.as3potrace
 			
 			while ((pt = find_next_in_path(bitmapDataMatrix, contour)) != null)
 			{
+				dump_bitmap(bitmapDataMatrix);
+				trace(pt);
+				
 				var hole:Path = find_path(bitmapDataMatrix, pt);
 				xor_path(bitmapDataMatrix, hole);
 				
@@ -207,10 +214,11 @@ package com.powerflasher.as3potrace
 			var mis:Array = path.monotonIntervals;
 			var mi:MonotonInterval = mis[0] as MonotonInterval;
 			mi.resetCurrentId(n);
-			mi.currentId = mi.min();
 			
 			var y:int = path.pt[mi.currentId].y;
 			var currentIntervals:Array = [mi];
+
+			mi.currentId = mi.min();
 
 			while ((mis.length > i + 1) && (MonotonInterval(mis[i + 1]).minY(path.pt) == y))
 			{
@@ -229,6 +237,7 @@ package com.powerflasher.as3potrace
 					var x1:int = path.pt[MonotonInterval(currentIntervals[k]).currentId].x + 1;
 					var x2:int = path.pt[MonotonInterval(currentIntervals[k + 1]).currentId].x;
 					for (var x:int = x1; x <= x2; x++) {
+						// Invert pixel
 						bitmapDataMatrix[y][x] ^= 0xffffff;
 					}
 					k++;
@@ -444,6 +453,17 @@ package com.powerflasher.as3potrace
 		private function PathList_to_ListOfCurveArrays(plist:Array):Array
 		{
 			return null;
+		}
+		
+		private function dump_bitmap(bitmapDataMatrix:Vector.<Vector.<uint>>):void
+		{
+			for (var y:int = 0; y < bitmapDataMatrix.length; y++) {
+				var row:String = "";
+				for (var x:int = 0; x < bitmapDataMatrix[y].length; x++) {
+					row += (bitmapDataMatrix[y][x] == 0) ? "x " : ". ";
+				}
+				trace(row);
+			}
 		}
 	}
 }

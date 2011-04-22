@@ -30,10 +30,10 @@
 		public var Simple_3_2:Class;
 		[Embed(source="../bitmaps/3-3.png")]
 		public var Simple_3_3:Class;
+		[Embed(source="../bitmaps/hole.png")]
+		public var Hole:Class;
 		[Embed(source="../bitmaps/pot1.png")]
 		public var Pot1:Class;
-		//[Embed(source="../bitmaps/pot2.png")]
-		//public var Pot2:Class;
 		
 		public function Main()
 		{
@@ -47,8 +47,8 @@
 			}));
 			addChild(new PushButton(this, 120, 10, "3-2.png", function():void { traceImage(Simple_3_2); }));
 			addChild(new PushButton(this, 230, 10, "3-3.png", function():void { traceImage(Simple_3_3); }));
-			addChild(new PushButton(this, 340, 10, "pot1.png", function():void { traceImage(Pot1); }));
-			//addChild(new PushButton(this, 450, 10, "pot2.png", function():void { traceImage(Pot2); }));
+			addChild(new PushButton(this, 340, 10, "hole.png", function():void { traceImage(Hole); }));
+			addChild(new PushButton(this, 450, 10, "pot1.png", function():void { traceImage(Pot1); }));
 		}
 		
 		protected function traceImage(ImageClass:Class):void
