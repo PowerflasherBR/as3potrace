@@ -1,5 +1,6 @@
 package com.powerflasher.as3potrace
 {
+	import com.powerflasher.as3potrace.math.mod;
 	import com.powerflasher.as3potrace.geom.Direction;
 	import com.powerflasher.as3potrace.geom.MonotonInterval;
 	import com.powerflasher.as3potrace.geom.Path;
@@ -54,7 +55,7 @@ package com.powerflasher.as3potrace
 			var plist:Array;
 			var pt:PointInt;
             while ((pt = find_next(bitmapDataMatrix)) != null) {
-                get_contur(bitmapDataMatrix, pt, plist);
+                get_contour(bitmapDataMatrix, pt, plist);
                 break;
             }
             return plist;
@@ -79,9 +80,86 @@ package com.powerflasher.as3potrace
 			return null;
 		}
 
-		private function get_contur(bitmapDataMatrix:Vector.<Vector.<uint>>, pt:PointInt, plist:Array):void
+		private function get_contour(bitmapDataMatrix:Vector.<Vector.<uint>>, pt:PointInt, plist:Array):void
 		{
-			var contur:Path = find_path(bitmapDataMatrix, pt);
+			var contour:Path = find_path(bitmapDataMatrix, pt);
+			
+			xor_path(bitmapDataMatrix, contour);
+			
+			trace(bitmapDataMatrix);
+		}
+
+		private function xor_path(bitmapDataMatrix:Vector.<Vector.<uint>>, path:Path):void
+		{
+			if(path.monotonIntervals.length == 0) {
+				return;
+			}
+			
+			var i:int = 0;
+			var n:int = path.pt.length;
+
+			var mis:Array = path.monotonIntervals;
+			var mi:MonotonInterval = mis[0] as MonotonInterval;
+			mi.resetCurrentId(n);
+			mi.currentId = mi.min();
+			
+			var y:int = path.pt[mi.currentId].y;
+			var currentIntervals:Array = [mi];
+
+			while ((mis.length > i + 1) && (MonotonInterval(mis[i + 1]).minY(path.pt) == y))
+			{
+				mi = MonotonInterval(mis[i + 1]);
+				mi.resetCurrentId(n);
+				currentIntervals.push(mi);
+				i++;
+			}
+			
+			while (currentIntervals.length > 0)
+			{
+				var j:int;
+				
+				for (var k:int = 0; k < currentIntervals.length - 1; k++)
+				{
+					var x1:int = path.pt[MonotonInterval(currentIntervals[k]).currentId].x + 1;
+					var x2:int = path.pt[MonotonInterval(currentIntervals[k + 1]).currentId].x;
+					for (var x:int = x1; x <= x2; x++) {
+						bitmapDataMatrix[y][x] ^= 0xffffff;
+					}
+					k++;
+				}
+				
+				y++;
+				for (j = currentIntervals.length - 1; j >= 0; j--)
+				{
+					var m:MonotonInterval = MonotonInterval(currentIntervals[j]);
+					if(y > m.maxY(path.pt)) {
+						currentIntervals.splice(j, 1);
+						continue;
+					}
+					var cid:int = m.currentId;
+					do
+					{
+						cid = m.increasing ? mod(cid + 1, n) : mod(cid - 1, n);
+					}
+					while(path.pt[cid].y < y);
+					m.currentId = cid;
+				}
+				
+				// Add Items of MonotonIntervals with Down.y==y
+				while ((mis.length > i + 1) && (MonotonInterval(mis[i + 1]).minY(path.pt) == y))
+                {
+					var newInt:MonotonInterval = MonotonInterval(mis[i + 1]);
+					// Search the correct x position
+					j = 0;
+					var _x:int = path.pt[newInt.min()].x;
+					while ((currentIntervals.length > j) && (_x > path.pt[MonotonInterval(currentIntervals[j]).currentId].x)) {
+						j++;
+					}
+					currentIntervals.splice(j, 0, newInt);
+					newInt.resetCurrentId(n);
+					i++;
+                }
+			}
 		}
 
 		/*
@@ -152,7 +230,7 @@ package com.powerflasher.as3potrace
 			
 			do
 			{
-				var i1n:int = (i + 1) % n; 
+				var i1n:int = mod(i + 1, n); 
 				if ((pt[i].y == pt[i1n].y) || (up == (pt[i].y < pt[i1n].y))) {
 					interval.to = i;
 				} else {

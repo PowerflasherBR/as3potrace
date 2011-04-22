@@ -1,5 +1,6 @@
 package com.powerflasher.as3potrace.geom
 {
+	import com.powerflasher.as3potrace.math.mod;
 	public class MonotonInterval
 	{
 		public var increasing:Boolean;
@@ -18,7 +19,7 @@ package com.powerflasher.as3potrace.geom
 		public function resetCurrentId(modulo:int):void
 		{
 			if(!increasing) {
-				currentId = (min() + 1) % modulo;
+				currentId = mod(min() + 1, modulo);
 			} else {
 				currentId = min();
 			}
