@@ -1,10 +1,10 @@
 package com.powerflasher.as3potrace
 {
-	import com.powerflasher.as3potrace.math.mod;
 	import com.powerflasher.as3potrace.geom.Direction;
 	import com.powerflasher.as3potrace.geom.MonotonInterval;
 	import com.powerflasher.as3potrace.geom.Path;
 	import com.powerflasher.as3potrace.geom.PointInt;
+	import com.powerflasher.as3potrace.math.mod;
 
 	import flash.display.BitmapData;
 	
@@ -12,6 +12,7 @@ package com.powerflasher.as3potrace
 	{
 		protected var bmWidth:uint;
 		protected var bmHeight:uint;
+		protected var params:POTraceParams;
 		
 		public function POTrace()
 		{
@@ -23,10 +24,11 @@ package com.powerflasher.as3potrace
 		 * Returns an array of curvepaths. 
 		 * Each of this paths is a list of connecting curves.
 		 */
-		public function potrace_trace(bitmapData:BitmapData):Array
+		public function potrace_trace(bitmapData:BitmapData, params:POTraceParams = null):Array
 		{
-			bmWidth = bitmapData.width;
-			bmHeight = bitmapData.height;
+			this.bmWidth = bitmapData.width;
+			this.bmHeight = bitmapData.height;
+			this.params = (params != null) ? params : new POTraceParams();
 			
 			var pos:uint = 0;
 			var bitmapDataVecTmp:Vector.<uint> = bitmapData.getVector(bitmapData.rect);
@@ -52,11 +54,10 @@ package com.powerflasher.as3potrace
 		 */
 		private function bm_to_pathlist(bitmapDataMatrix:Vector.<Vector.<uint>>):Array
 		{
-			var plist:Array;
+			var plist:Array = [];
 			var pt:PointInt;
             while ((pt = find_next(bitmapDataMatrix)) != null) {
                 get_contour(bitmapDataMatrix, pt, plist);
-                break;
             }
             return plist;
 		}
@@ -71,7 +72,7 @@ package com.powerflasher.as3potrace
 			var y:int;
 			for (y = 1; y < bmHeight - 1; y++) {
 				for (x = 0; x < bmWidth - 1; x++) {
-					if(bitmapDataMatrix[y][x + 1] == 0) {
+					if (bitmapDataMatrix[y][x + 1] == 0) {
 						// Black found
 						return new PointInt(x, y);
 					}
@@ -80,18 +81,123 @@ package com.powerflasher.as3potrace
 			return null;
 		}
 
+		/*
+		 * Searches a point inside a path such that source[x, y] = true and source[x+1, y] = false.
+		 * If this not exists, null will be returned, else the result is Point(x, y).
+		 */
+		private function find_next_in_path(bitmapDataMatrix:Vector.<Vector.<uint>>, path:Path):PointInt
+		{
+			if (path.monotonIntervals.length == 0) {
+				return null;
+			}
+			
+			var i:int = 0;
+			var n:int = path.pt.length;
+
+			var mis:Array = path.monotonIntervals;
+			var mi:MonotonInterval = mis[0] as MonotonInterval;
+			mi.resetCurrentId(n);
+			mi.currentId = mi.min();
+			
+			var y:int = path.pt[mi.currentId].y;
+			var currentIntervals:Array = [mi];
+
+			while ((mis.length > i + 1) && (MonotonInterval(mis[i + 1]).minY(path.pt) == y))
+			{
+				mi = MonotonInterval(mis[i + 1]);
+				mi.resetCurrentId(n);
+				currentIntervals.push(mi);
+				i++;
+			}
+			
+			while (currentIntervals.length > 0)
+			{
+				var j:int;
+				
+				for (var k:int = 0; k < currentIntervals.length - 1; k++)
+				{
+					var x1:int = path.pt[MonotonInterval(currentIntervals[k]).currentId].x + 1;
+					var x2:int = path.pt[MonotonInterval(currentIntervals[k + 1]).currentId].x;
+					for (var x:int = x1; x <= x2; x++) {
+						// This is the only difference to xor_path()
+						// TODO: Maybe it would be a good idea to merge these two methods.
+						if (bitmapDataMatrix[y][x] == 0) {
+							return new PointInt(x, y);
+						}
+					}
+					k++;
+				}
+				
+				y++;
+				for (j = currentIntervals.length - 1; j >= 0; j--)
+				{
+					var m:MonotonInterval = MonotonInterval(currentIntervals[j]);
+					if (y > m.maxY(path.pt)) {
+						currentIntervals.splice(j, 1);
+						continue;
+					}
+					var cid:int = m.currentId;
+					do
+					{
+						cid = m.increasing ? mod(cid + 1, n) : mod(cid - 1, n);
+					}
+					while (path.pt[cid].y < y);
+					m.currentId = cid;
+				}
+				
+				// Add Items of MonotonIntervals with Down.y==y
+				while ((mis.length > i + 1) && (MonotonInterval(mis[i + 1]).minY(path.pt) == y))
+                {
+					var newInt:MonotonInterval = MonotonInterval(mis[i + 1]);
+					// Search the correct x position
+					j = 0;
+					var _x:int = path.pt[newInt.min()].x;
+					while ((currentIntervals.length > j) && (_x > path.pt[MonotonInterval(currentIntervals[j]).currentId].x)) {
+						j++;
+					}
+					currentIntervals.splice(j, 0, newInt);
+					newInt.resetCurrentId(n);
+					i++;
+                }
+			}
+			return null;
+		}
+
 		private function get_contour(bitmapDataMatrix:Vector.<Vector.<uint>>, pt:PointInt, plist:Array):void
 		{
-			var contour:Path = find_path(bitmapDataMatrix, pt);
+			var polyPath:Array = [];
 			
+			var contour:Path = find_path(bitmapDataMatrix, pt);
 			xor_path(bitmapDataMatrix, contour);
+
+			// Only area > turdsize is taken
+			if (contour.area > params.turdSize) {
+				// Path with index 0 is a contour
+				polyPath.push(contour);
+				plist.push(polyPath);
+			}
+			
+			while ((pt = find_next_in_path(bitmapDataMatrix, contour)) != null)
+			{
+				var hole:Path = find_path(bitmapDataMatrix, pt);
+				xor_path(bitmapDataMatrix, hole);
+				
+				if (hole.area > params.turdSize) {
+					// Path with index > 0 is a hole
+					polyPath.push(hole);
+				}
+				
+				if ((pt = find_next_in_path(bitmapDataMatrix, hole)) != null) {
+					get_contour(bitmapDataMatrix, pt, plist);
+				}
+			}
 			
 			trace(bitmapDataMatrix);
 		}
 
 		private function xor_path(bitmapDataMatrix:Vector.<Vector.<uint>>, path:Path):void
 		{
-			if(path.monotonIntervals.length == 0) {
+			if (path.monotonIntervals.length == 0) {
 				return;
 			}
 			
@@ -132,7 +238,7 @@ package com.powerflasher.as3potrace
 				for (j = currentIntervals.length - 1; j >= 0; j--)
 				{
 					var m:MonotonInterval = MonotonInterval(currentIntervals[j]);
-					if(y > m.maxY(path.pt)) {
+					if (y > m.maxY(path.pt)) {
 						currentIntervals.splice(j, 1);
 						continue;
 					}
@@ -141,7 +247,7 @@ package com.powerflasher.as3potrace
 					{
 						cid = m.increasing ? mod(cid + 1, n) : mod(cid - 1, n);
 					}
-					while(path.pt[cid].y < y);
+					while (path.pt[cid].y < y);
 					m.currentId = cid;
 				}
 				
@@ -188,7 +294,7 @@ package com.powerflasher.as3potrace
             }
             while ((p.x != start.x) || (p.y != start.y));
 			
-			if(l.length == 0) {
+			if (l.length == 0) {
 				return null;
 			}
 			
@@ -211,7 +317,7 @@ package com.powerflasher.as3potrace
 		{
 			var result:Array = [];
 			var n:uint = pt.length;
-			if(n == 0) {
+			if (n == 0) {
 				return result;
 			}
 			
@@ -219,7 +325,7 @@ package com.powerflasher.as3potrace
 			
 			// Start with Strong Monoton (Pts[i].y < Pts[i+1].y) or (Pts[i].y > Pts[i+1].y)
 			var firstStrongMonoton:int = 0;
-			while(pt[firstStrongMonoton].y == pt[firstStrongMonoton + 1].y) {
+			while (pt[firstStrongMonoton].y == pt[firstStrongMonoton + 1].y) {
 				firstStrongMonoton++;
 			}
 
@@ -240,21 +346,21 @@ package com.powerflasher.as3potrace
 				}
 				i = i1n;
 			}
-			while(i != firstStrongMonoton);
+			while (i != firstStrongMonoton);
 			
 			if (intervals.length / 2 * 2 != intervals.length) {
 				var last:MonotonInterval = intervals.pop();
 				intervals[0].from = last.from;
 			}
 			
-			while(intervals.length > 0)
+			while (intervals.length > 0)
 			{
 				i = 0;
 				var m:MonotonInterval = intervals.shift();
-				while((i < result.length) && (pt[m.min()].y > pt[MonotonInterval(result[i]).min()].y)) {
+				while ((i < result.length) && (pt[m.min()].y > pt[MonotonInterval(result[i]).min()].y)) {
 					i++;
 				}
-				while((i < result.length) && (pt[m.min()].y == pt[MonotonInterval(result[i]).min()].y) && (pt[m.min()].x > pt[MonotonInterval(result[i]).min()].x)) {
+				while ((i < result.length) && (pt[m.min()].y == pt[MonotonInterval(result[i]).min()].y) && (pt[m.min()].x > pt[MonotonInterval(result[i]).min()].x)) {
 					i++;
 				}
 				result.splice(i, 0, m);
@@ -268,11 +374,11 @@ package com.powerflasher.as3potrace
 			switch(dir)
 			{
 				case Direction.WEST:
-					if(bitmapDataMatrix[p.y + 1][p.x + 1] == 0) {
+					if (bitmapDataMatrix[p.y + 1][p.x + 1] == 0) {
 						dir = Direction.NORTH;
 						p.y++;
 					} else {
-						if(bitmapDataMatrix[p.y][p.x + 1] == 0) {
+						if (bitmapDataMatrix[p.y][p.x + 1] == 0) {
 							dir = Direction.WEST;
 							p.x++;
 						} else {
@@ -283,11 +389,11 @@ package com.powerflasher.as3potrace
 					break;
 					
 				case Direction.SOUTH:
-					if(bitmapDataMatrix[p.y][p.x + 1] == 0) {
+					if (bitmapDataMatrix[p.y][p.x + 1] == 0) {
 						dir = Direction.WEST;
 						p.x++;
 					} else {
-						if(bitmapDataMatrix[p.y][p.x] == 0) {
+						if (bitmapDataMatrix[p.y][p.x] == 0) {
 							dir = Direction.SOUTH;
 							p.y--;
 						} else {
@@ -298,11 +404,11 @@ package com.powerflasher.as3potrace
 					break;
 					
 				case Direction.EAST:
-					if(bitmapDataMatrix[p.y][p.x] == 0) {
+					if (bitmapDataMatrix[p.y][p.x] == 0) {
 						dir = Direction.SOUTH;
 						p.y--;
 					} else {
-						if(bitmapDataMatrix[p.y + 1][p.x] == 0) {
+						if (bitmapDataMatrix[p.y + 1][p.x] == 0) {
 							dir = Direction.EAST;
 							p.x--;
 						} else {
@@ -313,11 +419,11 @@ package com.powerflasher.as3potrace
 					break;
 					
 				case Direction.NORTH:
-					if(bitmapDataMatrix[p.y + 1][p.x] == 0) {
+					if (bitmapDataMatrix[p.y + 1][p.x] == 0) {
 						dir = Direction.EAST;
 						p.x--;
 					} else {
-						if(bitmapDataMatrix[p.y + 1][p.x + 1] == 0) {
+						if (bitmapDataMatrix[p.y + 1][p.x + 1] == 0) {
 							dir = Direction.NORTH;
 							p.y++;
 						} else {
