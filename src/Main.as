@@ -66,12 +66,12 @@
 			addChild(bm);
 			
 			var sprite:Sprite = new Sprite();
-			sprite.x = 10;
-			sprite.y = 40;
+			sprite.x = 15;
+			sprite.y = 45;
 			addChild(sprite);
 			
 			var gd:Vector.<IGraphicsData> = new Vector.<IGraphicsData>();
-			gd.push(new GraphicsStroke(4, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 0)));
+			//gd.push(new GraphicsStroke(3, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 1)));
 			gd.push(new GraphicsSolidFill(0xff0000));
 			
 			var backend:IBackend = new GraphicsDataBackend(gd);
@@ -96,7 +96,7 @@
 			var loader:Loader = loaderInfo.loader;
 
 			var xs:Number = (stage.stageWidth - 20) / loader.width;
-			var ys:Number = (stage.stageHeight - 50) / loader.height;
+			var ys:Number = (stage.stageHeight - 60) / loader.height;
 			var s:Number = Math.min(xs, ys);
 			
 			var bmd:BitmapData = new BitmapData(loader.width * s, loader.height * s, false);
@@ -109,7 +109,7 @@
 			var bmd2:BitmapData = new BitmapData(bmd.width, bmd.height, false, 0xffffff);
 			bmd2.threshold(bmd, bmd.rect, new Point(0, 0), ">=", 0x808080, 0x000000, 0xffffff, false);
 			
-			var bm:Bitmap = new Bitmap(bmd2, PixelSnapping.AUTO, true);
+			var bm:Bitmap = new Bitmap(bmd, PixelSnapping.AUTO, true);
 			bm.x = 10;
 			bm.y = 40;
 			addChild(bm);
@@ -120,7 +120,7 @@
 			addChild(sprite);
 			
 			var gd:Vector.<IGraphicsData> = new Vector.<IGraphicsData>();
-			gd.push(new GraphicsStroke(4, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 0)));
+			//gd.push(new GraphicsStroke(4, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 0)));
 			gd.push(new GraphicsSolidFill(0xff0000));
 			
 			var backend:IBackend = new GraphicsDataBackend(gd);

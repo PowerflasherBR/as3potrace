@@ -1,7 +1,7 @@
 package com.powerflasher.as3potrace
 {
 	import com.powerflasher.as3potrace.backend.IBackend;
-	import com.powerflasher.as3potrace.backend.TraceBackend;
+	import com.powerflasher.as3potrace.backend.NullBackend;
 	import com.powerflasher.as3potrace.geom.Curve;
 	import com.powerflasher.as3potrace.geom.CurveKind;
 	import com.powerflasher.as3potrace.geom.Direction;
@@ -35,20 +35,25 @@ package com.powerflasher.as3potrace
 		 */
 		public function potrace_trace(bitmapData:BitmapData, params:POTraceParams = null, backend:IBackend = null):Array
 		{
-			this.bmWidth = bitmapData.width;
-			this.bmHeight = bitmapData.height;
-			this.params = (params != null) ? params : new POTraceParams();
+			// Make sure there is a 1px white border
+			var bitmapDataCopy:BitmapData = new BitmapData(bitmapData.width + 2, bitmapData.height + 2, false, 0xffffff);
+			bitmapDataCopy.copyPixels(bitmapData, bitmapData.rect, new Point(1, 1));
 			
+			this.bmWidth = bitmapDataCopy.width;
+			this.bmHeight = bitmapDataCopy.height;
+			this.params = (params != null) ? params : new POTraceParams();
+
 			if(backend == null) {
-				backend = new TraceBackend();
+				backend = new NullBackend();
 			}
 			backend.init(bmWidth, bmHeight);
 			
 			var i:int;
 			var j:int;
 			var pos:uint = 0;
-			var bitmapDataVecTmp:Vector.<uint> = bitmapData.getVector(bitmapData.rect);
+			var bitmapDataVecTmp:Vector.<uint> = bitmapDataCopy.getVector(bitmapDataCopy.rect);
 			var bitmapDataMatrix:Vector.<Vector.<uint>> = new Vector.<Vector.<uint>>(bmHeight);
+			
 			for (i = 0; i < bmHeight; i++) {
 				var row:Vector.<uint> = bitmapDataVecTmp.slice(pos, pos + bmWidth);
 				for (j = 0; j < row.length; j++) {
@@ -63,6 +68,7 @@ package com.powerflasher.as3potrace
 			process_path(plist);
 			
 			var shapes:Array = pathlist_to_curvearrayslist(plist);
+			
 			for (i = 0; i < shapes.length; i++) {
 				var shape:Array = shapes[i] as Array;
 				for (j = 0; j < shape.length; j++) {
@@ -92,7 +98,6 @@ package com.powerflasher.as3potrace
 					}
 				}
 			}
-			
 			backend.exit();
 			
 			return shapes;
