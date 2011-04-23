@@ -1,5 +1,6 @@
 ﻿package 
 {
+	import flash.display.GraphicsEndFill;
 	import com.bit101.components.PushButton;
 	import com.powerflasher.as3potrace.POTrace;
 	import com.powerflasher.as3potrace.backend.GraphicsDataBackend;
@@ -7,7 +8,6 @@
 
 	import flash.display.Bitmap;
 	import flash.display.BitmapData;
-	import flash.display.GraphicsEndFill;
 	import flash.display.GraphicsSolidFill;
 	import flash.display.GraphicsStroke;
 	import flash.display.IGraphicsData;
@@ -32,55 +32,67 @@
 	
 	public class Main extends Sprite
 	{
-		[Embed(source="../bitmaps/3-2.png")]
-		public var Simple_3_2:Class;
-		[Embed(source="../bitmaps/3-3.png")]
-		public var Simple_3_3:Class;
-		[Embed(source="../bitmaps/hole.png")]
-		public var Hole:Class;
+		[Embed(source="../bitmaps/cartoon.png")]
+		public var CartoonBitmap:Class;
 		[Embed(source="../bitmaps/pot1.png")]
-		public var Pot1:Class;
+		public var Pot1Bitmap:Class;
+		[Embed(source="../bitmaps/pot2.png")]
+		public var Pot2Bitmap:Class;
+		
+		private var imageContainer:Sprite;
 		
 		public function Main()
 		{
 			stage.align = StageAlign.TOP_LEFT;
 			stage.scaleMode = StageScaleMode.NO_SCALE;
+			
 			addChild(new PushButton(this, 10, 10, "Load Image", function():void {
 				var ref:FileReference = new FileReference();
 				ref.addEventListener(Event.SELECT, function(e:Event):void { ref.load(); });
 				ref.addEventListener(Event.COMPLETE, function(e:Event):void { loadBytes(ref.data); });
 				ref.browse([new FileFilter("PNG (*.png)", "*.png"), new FileFilter("JPG (*.jpg)", "*.jpg"), new FileFilter("GIF (*.gif)", "*.gif")]);
 			}));
-			addChild(new PushButton(this, 120, 10, "3-2.png", function():void { traceImage(Simple_3_2); }));
-			addChild(new PushButton(this, 230, 10, "3-3.png", function():void { traceImage(Simple_3_3); }));
-			addChild(new PushButton(this, 340, 10, "hole.png", function():void { traceImage(Hole); }));
-			addChild(new PushButton(this, 450, 10, "pot1.png", function():void { traceImage(Pot1); }));
+			
+			addChild(new PushButton(this, 120, 10, "cartoon.png", function():void { traceExampleImage(CartoonBitmap); }));
+			addChild(new PushButton(this, 230, 10, "pot1.png", function():void { traceExampleImage(Pot1Bitmap); }));
+			addChild(new PushButton(this, 340, 10, "pot2.png", function():void { traceExampleImage(Pot2Bitmap); }));
+
+			imageContainer = new Sprite();
+			imageContainer.x = 10;
+			imageContainer.y = 40;
+			addChild(imageContainer);
 		}
 		
-		protected function traceImage(ImageClass:Class):void
+		protected function traceExampleImage(ImageClass:Class):void
 		{
-			var bm:Bitmap = new ImageClass();
-			bm.x = 10;
-			bm.y = 40;
-			bm.alpha = 0.2;
-			addChild(bm);
+			traceImage(new ImageClass());
+		}
+
+		protected function traceImage(bitmap:Bitmap, bitmapOriginal:Bitmap = null):void
+		{
+			while(imageContainer.numChildren > 0) {
+				imageContainer.removeChildAt(0);
+			}
 			
-			var sprite:Sprite = new Sprite();
-			sprite.x = 15;
-			sprite.y = 45;
-			addChild(sprite);
+			var bm:Bitmap = (bitmapOriginal == null) ? bitmap : bitmapOriginal;
+			bm.alpha = 0.5;
+			imageContainer.addChild(bm);
+			
+			var curves:Sprite = new Sprite();
+			imageContainer.addChild(curves);
 			
 			var gd:Vector.<IGraphicsData> = new Vector.<IGraphicsData>();
-			//gd.push(new GraphicsStroke(3, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 1)));
-			gd.push(new GraphicsSolidFill(0xff0000));
+			var strokeFill:GraphicsSolidFill = new GraphicsSolidFill(0xff0000, 1);
+			gd.push(new GraphicsStroke(2, false, "normal", "none", "round", 3, strokeFill));
+			gd.push(new GraphicsSolidFill(0xff0000, 0.25));
 			
 			var backend:IBackend = new GraphicsDataBackend(gd);
 			var potrace:POTrace = new POTrace();
-			potrace.potrace_trace(bm.bitmapData, null, backend);
+			potrace.potrace_trace(bitmap.bitmapData, null, backend);
 			
 			gd.push(new GraphicsEndFill());
 			
-			sprite.graphics.drawGraphicsData(gd);
+			curves.graphics.drawGraphicsData(gd);
 		}
 
 		protected function loadBytes(image:ByteArray):void
@@ -103,33 +115,18 @@
 			var matrix:Matrix = new Matrix();
 			matrix.createBox(s, s);
 			bmd.draw(loader.content, matrix, null, null, null, true);
+			
+			var bmOriginal:Bitmap = new Bitmap(bmd, PixelSnapping.AUTO, true);
+			
 			bmd.applyFilter(bmd, bmd.rect, new Point(0, 0), grayscaleFilter);
 			bmd.applyFilter(bmd, bmd.rect, new Point(0, 0), blurFilter);
 			
 			var bmd2:BitmapData = new BitmapData(bmd.width, bmd.height, false, 0xffffff);
 			bmd2.threshold(bmd, bmd.rect, new Point(0, 0), ">=", 0x808080, 0x000000, 0xffffff, false);
 			
-			var bm:Bitmap = new Bitmap(bmd, PixelSnapping.AUTO, true);
-			bm.x = 10;
-			bm.y = 40;
-			addChild(bm);
+			var bm:Bitmap = new Bitmap(bmd2, PixelSnapping.AUTO, true);
 			
-			var sprite:Sprite = new Sprite();
-			sprite.x = 10;
-			sprite.y = 40;
-			addChild(sprite);
-			
-			var gd:Vector.<IGraphicsData> = new Vector.<IGraphicsData>();
-			//gd.push(new GraphicsStroke(4, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 0)));
-			gd.push(new GraphicsSolidFill(0xff0000));
-			
-			var backend:IBackend = new GraphicsDataBackend(gd);
-			var potrace:POTrace = new POTrace();
-			potrace.potrace_trace(bmd2, null, backend);
-			
-			gd.push(new GraphicsEndFill());
-			
-			sprite.graphics.drawGraphicsData(gd);
+			traceImage(bm, bmOriginal);
 		}
 		
 		protected function get grayscaleFilter():BitmapFilter

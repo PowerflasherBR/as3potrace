@@ -6,6 +6,7 @@ package com.powerflasher.as3potrace
 	import com.powerflasher.as3potrace.geom.CurveKind;
 	import com.powerflasher.as3potrace.geom.Direction;
 	import com.powerflasher.as3potrace.geom.MonotonInterval;
+	import com.powerflasher.as3potrace.geom.Opti;
 	import com.powerflasher.as3potrace.geom.Path;
 	import com.powerflasher.as3potrace.geom.PointInt;
 	import com.powerflasher.as3potrace.geom.PrivCurve;
@@ -22,10 +23,8 @@ package com.powerflasher.as3potrace
 		
 		protected static const POTRACE_CORNER:int = 1;
 		protected static const POTRACE_CURVETO:int = 2;
-		
-		public function POTrace()
-		{
-		}
+
+		protected static const COS179:Number = Math.cos(179 * Math.PI / 180);
 		
 		/*
 		 * Main function
@@ -46,11 +45,14 @@ package com.powerflasher.as3potrace
 			if(backend == null) {
 				backend = new NullBackend();
 			}
+
 			backend.init(bmWidth, bmHeight);
 			
 			var i:int;
 			var j:int;
+			var k:int;
 			var pos:uint = 0;
+			
 			var bitmapDataVecTmp:Vector.<uint> = bitmapDataCopy.getVector(bitmapDataCopy.rect);
 			var bitmapDataMatrix:Vector.<Vector.<uint>> = new Vector.<Vector.<uint>>(bmHeight);
 			
@@ -76,7 +78,7 @@ package com.powerflasher.as3potrace
 					if(curves.length > 0) {
 						var curve:Curve = curves[0] as Curve;
 						backend.moveTo(curve.a.clone());
-						for (var k:int = 0; k < curves.length; k++) {
+						for (k = 0; k < curves.length; k++) {
 							curve = curves[k] as Curve;
 							switch(curve.kind) {
 								case CurveKind.BEZIER:
@@ -104,17 +106,17 @@ package com.powerflasher.as3potrace
 		}
 		
 		/*
-		 * Decompose the given bitmap into paths. Returns a linked list of
+		 * Decompose the given bitmap into paths. Returns a list of
 		 * Path objects with the fields len, pt, area filled
 		 */
 		private function bm_to_pathlist(bitmapDataMatrix:Vector.<Vector.<uint>>):Array
 		{
 			var plist:Array = [];
 			var pt:PointInt;
-            while ((pt = find_next(bitmapDataMatrix)) != null) {
-                get_contour(bitmapDataMatrix, pt, plist);
-            }
-            return plist;
+			while ((pt = find_next(bitmapDataMatrix)) != null) {
+				get_contour(bitmapDataMatrix, pt, plist);
+			}
+			return plist;
 		}
 
 		/*
@@ -140,10 +142,8 @@ package com.powerflasher.as3potrace
 		{
 			var plist:Array = [];
 			
-			//dump_bitmap(bitmapDataMatrix);
-			//trace(pt);
-			
 			var path:Path = find_path(bitmapDataMatrix, pt);
+
 			xor_path(bitmapDataMatrix, path);
 
 			// Only area > turdsize is taken
@@ -155,10 +155,8 @@ package com.powerflasher.as3potrace
 			
 			while ((pt = find_next_in_path(bitmapDataMatrix, path)) != null)
 			{
-				//dump_bitmap(bitmapDataMatrix);
-				//trace(pt);
-				
 				var hole:Path = find_path(bitmapDataMatrix, pt);
+
 				xor_path(bitmapDataMatrix, hole);
 				
 				if (hole.area > params.turdSize) {
@@ -192,11 +190,11 @@ package com.powerflasher.as3potrace
 			do
 			{
 				l.push(p.clone());
-                var _y:int = p.y;
-                dir = find_next_trace(bitmapDataMatrix, p, dir);
-                area += p.x * (_y - p.y);
-            }
-            while ((p.x != start.x) || (p.y != start.y));
+				var _y:int = p.y;
+				dir = find_next_trace(bitmapDataMatrix, p, dir);
+				area += p.x * (_y - p.y);
+			}
+			while ((p.x != start.x) || (p.y != start.y));
 			
 			if (l.length == 0) {
 				return null;
@@ -286,7 +284,7 @@ package com.powerflasher.as3potrace
 				
 				// Add Items of MonotonIntervals with Down.y==y
 				while ((mis.length > i + 1) && (mis[i + 1].minY(path.pt) == y))
-                {
+				{
 					var newInt:MonotonInterval = mis[i + 1];
 					// Search the correct x position
 					j = 0;
@@ -297,7 +295,7 @@ package com.powerflasher.as3potrace
 					currentIntervals.splice(j, 0, newInt);
 					newInt.resetCurrentId(n);
 					i++;
-                }
+				}
 			}
 			return null;
 		}
@@ -363,7 +361,7 @@ package com.powerflasher.as3potrace
 				
 				// Add Items of MonotonIntervals with Down.y==y
 				while ((mis.length > i + 1) && (mis[i + 1].minY(path.pt) == y))
-                {
+				{
 					var newInt:MonotonInterval = mis[i + 1];
 					// Search the correct x position
 					j = 0;
@@ -374,7 +372,7 @@ package com.powerflasher.as3potrace
 					currentIntervals.splice(j, 0, newInt);
 					newInt.resetCurrentId(n);
 					i++;
-                }
+				}
 			}
 		}
 
@@ -513,6 +511,13 @@ package com.powerflasher.as3potrace
 					bestpolygon(path);
 					adjust_vertices(path);
 					smooth(path.curves, 1, params.alphaMax);
+					if (params.curveOptimizing) {
+						opticurve(path, params.optTolerance);
+						path.fCurves = path.optimizedCurves;
+					} else {
+						path.fCurves = path.curves;
+					}
+					path.curves = path.fCurves;
 				}
 			}
 		}
@@ -697,10 +702,10 @@ package com.powerflasher.as3potrace
 				// can be solved with integer arithmetic.
 				j = int.MAX_VALUE;
 				if (b < 0) {
-				    j = floordiv(a, -b);
+					j = floordiv(a, -b);
 				}
 				if (d > 0) {
-				    j = min(j, floordiv(-c, d));
+					j = min(j, floordiv(-c, d));
 				}
 				pivot[i] = mod(k1 + j, n);
 			}
@@ -745,7 +750,7 @@ package com.powerflasher.as3potrace
 			if (j >= n) {
 				j -= n;
 				r++;
-		    }
+			}
 
 			var x:Number = sums[j + 1].x - sums[i].x + r * sums[n].x;
 			var y:Number = sums[j + 1].y - sums[i].y + r * sums[n].y;
@@ -763,7 +768,7 @@ package com.powerflasher.as3potrace
 			var b:Number = ((xy - x * py - y * px) / k + px * py);
 			var c:Number = ((y2 - 2 * y * py) / k + py * py);
 
-		    return Math.sqrt(ex * ex * a + 2 * ex * ey * b + ey * ey * c);
+			return Math.sqrt(ex * ex * a + 2 * ex * ey * b + ey * ey * c);
 		}
 
 		/*
@@ -800,17 +805,17 @@ package com.powerflasher.as3potrace
 			// j <= clip0[i] iff clip1[j] <= i, for i,j = 0..n
 			j = 1;
 			for (i = 0; i < n; i++) {
-			    while (j <= clip0[i]) {
-			        clip1[j] = i;
-			        j++;
-			    }
+				while (j <= clip0[i]) {
+					clip1[j] = i;
+					j++;
+				}
 			}
 			
 			// calculate seg0[j] = longest path from 0 with j segments
 			i = 0;
 			for (j = 0; i < n; j++) {
-			    seg0[j] = i;
-			    i = clip0[i];
+				seg0[j] = i;
+				i = clip0[i];
 			}
 			seg0[j] = n;
 			
@@ -818,8 +823,8 @@ package com.powerflasher.as3potrace
 			i = n;
 			m = j;
 			for (j = m; j > 0; j--) {
-			    seg1[j] = i;
-			    i = clip1[i];
+				seg1[j] = i;
+				i = clip1[i];
 			}
 			seg1[0] = 0;
 			
@@ -1132,6 +1137,282 @@ package com.powerflasher.as3potrace
 			}
 		}
 
+		/////////////////////////////////////////////////////////////////////////
+		// STAGE 5
+		// Curve optimization (Sec. 2.4).
+		/////////////////////////////////////////////////////////////////////////
+		
+		/*
+		 * Optimize the path p, replacing sequences of Bezier segments by a
+		 * single segment when possible.
+		 */
+		private function opticurve(path:Path, optTolerance:Number):void
+		{
+			var m:int = path.curves.n;
+			var pt:Vector.<int> = new Vector.<int>(m);
+			var pen:Vector.<Number> = new Vector.<Number>(m + 1);
+			var len:Vector.<int> = new Vector.<int>(m + 1);
+			var opt:Vector.<Opti> = new Vector.<Opti>(m + 1);
+			var convc:Vector.<int> = new Vector.<int>(m);
+			var areac:Vector.<Number> = new Vector.<Number>(m + 1);
+			
+			var i:int;
+			var j:int;
+			var area:Number;
+			var alpha:Number;
+			var p0:Point;
+			var i1:int;
+			var o:Opti = new Opti();
+			var r:Boolean;
+			
+			// Pre-calculate convexity: +1 = right turn, -1 = left turn, 0 = corner
+			for (i = 0; i < m; i++) {
+				if(path.curves.tag[i] == POTRACE_CURVETO) {
+					convc[i] = sign(dpara(path.curves.vertex[mod(i - 1, m)], path.curves.vertex[i], path.curves.vertex[mod(i + 1, m)]));
+				} else {
+					convc[i] = 0;
+				}
+			}
+			
+			// Pre-calculate areas
+			area = 0;
+			areac[0] = 0;
+			p0 = path.curves.vertex[0];
+			for (i = 0; i < m; i++) {
+				i1 = mod(i + 1, m);
+				if (path.curves.tag[i1] == POTRACE_CURVETO) {
+					alpha = path.curves.alpha[i1];
+					area += 0.3 * alpha * (4 - alpha) * dpara(path.curves.controlPoints[i][2], path.curves.vertex[i1], path.curves.controlPoints[i1][2]) / 2;
+					area += dpara(p0, path.curves.controlPoints[i][2], path.curves.controlPoints[i1][2]) / 2;
+				}
+				areac[i + 1] = area;
+			}
+			
+			pt[0] = -1;
+			pen[0] = 0;
+			len[0] = 0;
+			
+			// Fixme:
+			// We always start from a fixed point -- should find the best curve cyclically ###
+			
+			for (j = 1; j <= m; j++)
+			{
+				// Calculate best path from 0 to j
+				pt[j] = j - 1;
+				pen[j] = pen[j - 1];
+				len[j] = len[j - 1] + 1;
+				
+				for (i = j - 2; i >= 0; i--) {
+					r = opti_penalty(path, i, mod(j, m), o, optTolerance, convc, areac);
+					if (r) {
+						break;
+					}
+					if (len[j] > len[i] + 1 || (len[j] == len[i] + 1 && pen[j] > pen[i] + o.pen)) {
+						pt[j] = i;
+						pen[j] = pen[i] + o.pen;
+						len[j] = len[i] + 1;
+						opt[j] = o.clone();
+					}
+				}
+			}
+			
+			var om:int = len[m];
+
+			path.optimizedCurves = new PrivCurve(om);
+			
+			var s:Vector.<Number> = new Vector.<Number>(om);
+			var t:Vector.<Number> = new Vector.<Number>(om);
+			
+			j = m;
+			for (i = om - 1; i >= 0; i--) {
+				var jm:int = mod(j, m);
+				if (pt[j] == j - 1) {
+					path.optimizedCurves.tag[i] = path.curves.tag[jm];
+					path.optimizedCurves.controlPoints[i][0] = path.curves.controlPoints[jm][0];
+					path.optimizedCurves.controlPoints[i][1] = path.curves.controlPoints[jm][1];
+					path.optimizedCurves.controlPoints[i][2] = path.curves.controlPoints[jm][2];
+					path.optimizedCurves.vertex[i] = path.curves.vertex[jm];
+					path.optimizedCurves.alpha[i] = path.curves.alpha[jm];
+					path.optimizedCurves.alpha0[i] = path.curves.alpha0[jm];
+					path.optimizedCurves.beta[i] = path.curves.beta[jm];
+					s[i] = t[i] = 1;
+				} else {
+					path.optimizedCurves.tag[i] = POTRACE_CURVETO;
+					path.optimizedCurves.controlPoints[i][0] = opt[j].c[0];
+					path.optimizedCurves.controlPoints[i][1] = opt[j].c[1];
+					path.optimizedCurves.controlPoints[i][2] = path.curves.controlPoints[jm][2];
+					path.optimizedCurves.vertex[i] = interval(opt[j].s, path.curves.controlPoints[jm][2], path.curves.vertex[jm]);
+					path.optimizedCurves.alpha[i] = opt[j].alpha;
+					path.optimizedCurves.alpha0[i] = opt[j].alpha;
+					s[i] = opt[j].s;
+					t[i] = opt[j].t;
+				}
+				j = pt[j];
+			}
+			
+			/* Calculate beta parameters */
+			for (i = 0; i < om; i++) {
+				i1 = mod(i + 1, om);
+				path.optimizedCurves.beta[i] = s[i] / (s[i] + t[i1]);
+			}
+		}
+
+		/*
+		 * Calculate best fit from i+.5 to j+.5.  Assume i<j (cyclically).
+		 * Return 0 and set badness and parameters (alpha, beta), if
+		 * possible. Return 1 if impossible.
+		 */
+		private function opti_penalty(path:Path, i:int, j:int, res:Opti, optTolerance:Number, convc:Vector.<int>, areac:Vector.<Number>):Boolean
+		{
+			var m:int = path.curves.n;
+			var k:int;
+			var k1:int;
+			var k2:int;
+			var conv:int;
+			var i1:int;
+			var area:Number;
+			var d:Number;
+			var d1:Number;
+			var d2:Number;
+			var pt:Point;
+			
+			if(i == j) {
+				// sanity - a full loop can never be an opticurve
+				return true;
+			}
+
+			k = i;
+			i1 = mod(i + 1, m);
+			k1 = mod(k + 1, m);
+			conv = convc[k1];
+			if (conv == 0) {
+				return true;
+			}
+			d = ddist(path.curves.vertex[i], path.curves.vertex[i1]);
+			for (k = k1; k != j; k = k1) {
+				k1 = mod(k + 1, m);
+				k2 = mod(k + 2, m);
+				if (convc[k1] != conv) {
+					return true;
+				}
+				if (sign(cprod(path.curves.vertex[i], path.curves.vertex[i1], path.curves.vertex[k1], path.curves.vertex[k2])) != conv) {
+					return true;
+				}
+				if (iprod1(path.curves.vertex[i], path.curves.vertex[i1], path.curves.vertex[k1], path.curves.vertex[k2]) < d * ddist(path.curves.vertex[k1], path.curves.vertex[k2]) * COS179) {
+					return true;
+				}
+			}
+			
+			// the curve we're working in:
+			var p0:Point = path.curves.controlPoints[mod(i, m)][2];
+			var p1:Point = path.curves.vertex[mod(i + 1, m)];
+			var p2:Point = path.curves.vertex[mod(j, m)];
+			var p3:Point = path.curves.controlPoints[mod(j, m)][2];
+
+			// determine its area
+			area = areac[j] - areac[i];
+			area -= dpara(path.curves.vertex[0], path.curves.controlPoints[i][2], path.curves.controlPoints[j][2]) / 2;
+			if (i >= j) {
+				area += areac[m];
+			}
+
+			// find intersection o of p0p1 and p2p3.
+			// Let t,s such that o = interval(t, p0, p1) = interval(s, p3, p2).
+			// Let A be the area of the triangle (p0, o, p3).
+			
+			var A1:Number = dpara(p0, p1, p2);
+			var A2:Number = dpara(p0, p1, p3);
+			var A3:Number = dpara(p0, p2, p3);
+			var A4:Number = A1 + A3 - A2;
+			
+			if (A2 == A1) {
+				// this should never happen
+				return true;
+			}
+			
+			var t:Number = A3 / (A3 - A4);
+			var s:Number = A2 / (A2 - A1);
+			var A:Number = A2 * t / 2.0;
+			
+			if (A == 0) {
+				// this should never happen
+				return true;
+			}
+			
+			var R:Number = area / A; // relative area
+			var alpha:Number = 2 - Math.sqrt(4 - R / 0.3); // overall alpha for p0-o-p3 curve
+			
+			res.c = new Vector.<Point>(2);
+			res.c[0] = interval(t * alpha, p0, p1);
+			res.c[1] = interval(s * alpha, p3, p2);
+			res.alpha = alpha;
+			res.t = t;
+			res.s = s;
+			
+			p1 = res.c[0];
+			p2 = res.c[1];  // the proposed curve is now (p0,p1,p2,p3)
+			
+			res.pen = 0;
+
+			// Calculate penalty
+			// Check tangency with edges
+			for (k = mod(i + 1, m); k != j; k = k1) {
+				k1 = mod(k + 1, m);
+				t = tangent(p0, p1, p2, p3, path.curves.vertex[k], path.curves.vertex[k1]);
+				if (t < -0.5) {
+					return true;
+				}
+				pt = bezier(t, p0, p1, p2, p3);
+				d = ddist(path.curves.vertex[k], path.curves.vertex[k1]);
+				if (d == 0) {
+					// this should never happen
+					return true;
+				}
+				d1 = dpara(path.curves.vertex[k], path.curves.vertex[k1], pt) / d;
+				if (Math.abs(d1) > optTolerance) {
+					return true;
+				}
+				if (iprod(path.curves.vertex[k], path.curves.vertex[k1], pt) < 0 || iprod(path.curves.vertex[k1], path.curves.vertex[k], pt) < 0) {
+					return true;
+				}
+				res.pen += d1 * d1;
+			}
+
+			// Check corners
+			for (k = i; k != j; k = k1) {
+				k1 = mod(k + 1, m);
+				t = tangent(p0, p1, p2, p3, path.curves.controlPoints[k][2], path.curves.controlPoints[k1][2]);
+				if (t < -0.5) {
+					return true;
+				}
+				pt = bezier(t, p0, p1, p2, p3);
+				d = ddist(path.curves.controlPoints[k][2], path.curves.controlPoints[k1][2]);
+				if (d == 0) {
+					// this should never happen
+					return true;
+				}
+				d1 = dpara(path.curves.controlPoints[k][2], path.curves.controlPoints[k1][2], pt) / d;
+				d2 = dpara(path.curves.controlPoints[k][2], path.curves.controlPoints[k1][2], path.curves.vertex[k1]) / d;
+				d2 *= 0.75 * path.curves.alpha[k1];
+				if (d2 < 0) {
+					d1 = -d1;
+					d2 = -d2;
+				}
+				if (d1 < d2 - optTolerance) {
+					return true;
+				}
+				if (d1 < d2) {
+					res.pen += (d1 - d2) * (d1 - d2);
+				}
+			}
+
+			return false;
+		}
+
+		/////////////////////////////////////////////////////////////////////////
+		// 
+		/////////////////////////////////////////////////////////////////////////
+
 		private function pathlist_to_curvearrayslist(plists:Array):Array
 		{
 			var res:Array = [];
@@ -1143,13 +1424,13 @@ package com.powerflasher.as3potrace
 				var clist:Array = [];
 				res.push(clist);
 
-                for (var i:int = 0; i < plist.length; i++)
-                {
-                    var p:Path = plist[i] as Path;
-                    var A:Point = p.curves.controlPoints[p.curves.n - 1][2];
-                    var curves:Array = [];
-                    for (var k:int = 0; k < p.curves.n; k++)
-                    {
+				for (var i:int = 0; i < plist.length; i++)
+				{
+					var p:Path = plist[i] as Path;
+					var A:Point = p.curves.controlPoints[p.curves.n - 1][2];
+					var curves:Array = [];
+					for (var k:int = 0; k < p.curves.n; k++)
+					{
 						var C:Point = p.curves.controlPoints[k][0];
 						var D:Point = p.curves.controlPoints[k][1];
 						var E:Point = p.curves.controlPoints[k][2];
@@ -1180,7 +1461,7 @@ package com.powerflasher.as3potrace
 						}
 						clist.push(curveList);
 					}
-                }
+				}
 			}
 			return res;
 		}
@@ -1197,18 +1478,18 @@ package com.powerflasher.as3potrace
 				kind = CurveKind.BEZIER;
 			}
 			if ((kind == CurveKind.LINE)) {
-			    if ((curves.length > 0) && (Curve(curves[curves.length - 1]).kind == CurveKind.LINE)) {
-			        var c:Curve = curves[curves.length - 1] as Curve;
-			        if ((Math.abs(xprodf(new Point(c.b.x - c.a.x, c.b.y - c.a.y), new Point(b.x - a.x, b.y - a.y))) < 0.01) && (iprod(c.b, c.a, b) < 0)) {
-			            curves[curves.length - 1] = new Curve(kind, c.a, c.a, c.a, b);
-			        } else {
-			            curves.push(new Curve(CurveKind.LINE, a, cpa, cpb, b));
-			        }
-			    } else {
-			        curves.push(new Curve(CurveKind.LINE, a, cpa, cpb, b));
-			    }
+				if ((curves.length > 0) && (Curve(curves[curves.length - 1]).kind == CurveKind.LINE)) {
+					var c:Curve = curves[curves.length - 1] as Curve;
+					if ((Math.abs(xprodf(new Point(c.b.x - c.a.x, c.b.y - c.a.y), new Point(b.x - a.x, b.y - a.y))) < 0.01) && (iprod(c.b, c.a, b) < 0)) {
+						curves[curves.length - 1] = new Curve(kind, c.a, c.a, c.a, b);
+					} else {
+						curves.push(new Curve(CurveKind.LINE, a, cpa, cpb, b));
+					}
+				} else {
+					curves.push(new Curve(CurveKind.LINE, a, cpa, cpb, b));
+				}
 			} else {
-			    curves.push(new Curve(CurveKind.BEZIER, a, cpa, cpb, b));
+				curves.push(new Curve(CurveKind.BEZIER, a, cpa, cpb, b));
 			}
 		}
 
@@ -1296,16 +1577,16 @@ package com.powerflasher.as3potrace
 				r++;
 			}
 			while (i >= n) {
-			    i -= n;
-			    r--;
+				i -= n;
+				r--;
 			}
 			while (j < 0) {
-			    j += n;
-			    r--;
+				j += n;
+				r--;
 			}
 			while (i < 0) {
-			    i += n;
-			    r++;
+				i += n;
+				r++;
 			}
 			
 			var x:Number = sums[j + 1].x - sums[i].x + r * sums[n].x;
@@ -1367,6 +1648,71 @@ package com.powerflasher.as3potrace
 		}
 
 		/*
+		 * Calculate point of a bezier curve
+		 */
+		private function bezier(t:Number, p0:Point, p1:Point, p2:Point, p3:Point):Point
+		{
+			var s:Number = 1 - t;
+			var res:Point = new Point();
+
+			// Note: a good optimizing compiler (such as gcc-3) reduces the
+			// following to 16 multiplications, using common subexpression
+			// elimination.
+			
+			// Note [cw]: Flash: fudeu! ;)
+
+			res.x = s * s * s * p0.x + 3 * (s * s * t) * p1.x + 3 * (t * t * s) * p2.x + t * t * t * p3.x;
+			res.y = s * s * s * p0.y + 3 * (s * s * t) * p1.y + 3 * (t * t * s) * p2.y + t * t * t * p3.y;
+
+			return res;
+		}
+
+		/*
+		 * Calculate the point t in [0..1] on the (convex) bezier curve
+		 * (p0,p1,p2,p3) which is tangent to q1-q0. Return -1.0 if there is no
+		 * solution in [0..1].
+		 */
+		private function tangent(p0:Point, p1:Point, p2:Point, p3:Point, q0:Point, q1:Point):Number
+		{
+			// (1-t)^2 A + 2(1-t)t B + t^2 C = 0
+			var A:Number = cprod(p0, p1, q0, q1);
+			var B:Number = cprod(p1, p2, q0, q1);
+			var C:Number = cprod(p2, p3, q0, q1);
+			
+			// a t^2 + b t + c = 0
+			var a:Number = A - 2 * B + C;
+			var b:Number = -2 * A + 2 * B;
+			var c:Number = A;
+
+			var d:Number = b * b - 4 * a * c;
+
+			if (a == 0 || d < 0) {
+				return -1;
+			}
+
+			var s:Number = Math.sqrt(d);
+
+			var r1:Number = (-b + s) / (2 * a);
+			var r2:Number = (-b - s) / (2 * a);
+
+			if (r1 >= 0 && r1 <= 1) {
+				return r1;
+			} else if (r2 >= 0 && r2 <= 1) {
+				return r2;
+			} else {
+				return -1;
+			}
+		}
+
+		/*
+		 * Calculate distance between two points
+		 */
+		private function ddist(p:Point, q:Point):Number
+		{
+			return Math.sqrt((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y));
+		}
+		
+		/*
 		 * Calculate p1 x p2
 		 * (Integer version)
 		 */
@@ -1384,21 +1730,29 @@ package com.powerflasher.as3potrace
 			return p1.x * p2.y - p1.y * p2.x;
 		}
 		
-        /*
-         * Calculate (p1 - p0) * (p2 - p0)
-         */
-        private function iprod(p0:Point, p1:Point, p2:Point):Number
-        {
-            return (p1.x - p0.x) * (p2.x - p0.x) + (p1.y - p0.y) * (p2.y - p0.y);
-        }
+		/*
+		 * calculate (p1 - p0) x (p3 - p2)
+		 */
+		private function cprod(p0:Point, p1:Point, p2:Point, p3:Point):Number
+		{
+			return (p1.x - p0.x) * (p3.y - p2.y) - (p3.x - p2.x) * (p1.y - p0.y);
+		}
 
-        /*
-         * Calculate (p1 - p0) * (p3 - p2)
-         */
-        //private function iprod1(p0:Point, p1:Point, p2:Point, p3:Point):Number
-        //{
-        //   return (p1.x - p0.x) * (p3.x - p2.x) + (p1.y - p0.y) * (p3.y - p2.y);
-        //}
+		/*
+		 * Calculate (p1 - p0) * (p2 - p0)
+		 */
+		private function iprod(p0:Point, p1:Point, p2:Point):Number
+		{
+			return (p1.x - p0.x) * (p2.x - p0.x) + (p1.y - p0.y) * (p2.y - p0.y);
+		}
+
+		/*
+		 * Calculate (p1 - p0) * (p3 - p2)
+		 */
+		private function iprod1(p0:Point, p1:Point, p2:Point, p3:Point):Number
+		{
+			return (p1.x - p0.x) * (p3.x - p2.x) + (p1.y - p0.y) * (p3.y - p2.y);
+		}
 
 		private function interval(lambda:Number, a:Point, b:Point):Point
 		{
