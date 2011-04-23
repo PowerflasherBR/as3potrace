@@ -114,9 +114,22 @@
 			bm.y = 40;
 			addChild(bm);
 			
+			var sprite:Sprite = new Sprite();
+			sprite.x = 10;
+			sprite.y = 40;
+			addChild(sprite);
+			
+			var gd:Vector.<IGraphicsData> = new Vector.<IGraphicsData>();
+			gd.push(new GraphicsStroke(4, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 0)));
+			gd.push(new GraphicsSolidFill(0xff0000));
+			
+			var backend:IBackend = new GraphicsDataBackend(gd);
 			var potrace:POTrace = new POTrace();
-			var shapes:Array = potrace.potrace_trace(bmd2);
-			trace(shapes);
+			potrace.potrace_trace(bmd2, null, backend);
+			
+			gd.push(new GraphicsEndFill());
+			
+			sprite.graphics.drawGraphicsData(gd);
 		}
 		
 		protected function get grayscaleFilter():BitmapFilter

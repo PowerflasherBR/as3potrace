@@ -48,5 +48,10 @@ package com.powerflasher.as3potrace.geom
 		{
 			return (a >= n) ? a % n : ((a >= 0) ? a : n - 1 - (-1 - a) % n);
 		}
+		
+		public function toString():String
+		{
+			return "(" + from + "-" + to + ":" + increasing + ")";
+		}
 	}
 }

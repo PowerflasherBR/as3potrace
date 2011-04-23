@@ -5,7 +5,7 @@ package com.powerflasher.as3potrace.geom
 		public var x:int;
 		public var y:int;
 		
-		public function PointInt(x:int, y:int)
+		public function PointInt(x:int = 0, y:int = 0)
 		{
 			this.x = x;
 			this.y = y;

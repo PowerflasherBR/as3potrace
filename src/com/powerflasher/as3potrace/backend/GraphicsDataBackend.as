@@ -1,5 +1,6 @@
 package com.powerflasher.as3potrace.backend
 {
+	import com.powerflasher.as3potrace.geom.CubicCurve;
 	import flash.display.GraphicsPath;
 	import flash.display.IGraphicsData;
 	import flash.geom.Point;
@@ -17,20 +18,18 @@ package com.powerflasher.as3potrace.backend
 		
 		public function init(width:int, height:int):void
 		{
-			trace("Segment w:" + width + ", h:" + height);
 		}
 
 		public function moveTo(a:Point):void
 		{
-			trace("  MoveTo a:" + a);
 			gp.moveTo(a.x, a.y);
 		}
 
 		public function addBezier(a:Point, cpa:Point, cpb:Point, b:Point):void
 		{
 			trace("  Bezier a:" + a + ", cpa:" + cpa + ", cpb:" + cpb + ", b:" + b);
-			//var cubic:CubicCurve = new CubicCurve(gp);
-			//cubic.drawBezierPts(a, cpa, cpb, b);
+			var cubic:CubicCurve = new CubicCurve(gp);
+			cubic.drawBezierPts(a, cpa, cpb, b);
 			gp.lineTo(b.x, b.y);
 		}
 
