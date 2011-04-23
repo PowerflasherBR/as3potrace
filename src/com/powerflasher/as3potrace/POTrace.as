@@ -1,4 +1,32 @@
-package com.powerflasher.as3potrace
+/*
+	This program is free software; you can redistribute it and/or modify it 
+	under the terms of the GNU General Public License as published by the 
+	Free Software Foundation; either version 2, or (at your option) any later
+	version.
+	
+	This program is distributed in the hope that it will be useful, but 
+	WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+	Public License for more details.
+
+	You should have received a copy of the GNU General Public License along
+	with this program; if not, write to the Free Software Foundation, Inc.,
+	59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+	
+	Copyright (C) 2001-2010 Peter Selinger (Original author)
+	Copyright (C) 2009 Wolfgang Nagl (C# port of Potrace 1.8: "Vectorization")
+	Copyright (C) 2011 Claus Wahlers (AS3 port of Vectorization: "as3potrace")
+	
+	"Potrace" is a trademark of Peter Selinger. "Potrace Professional" and
+	"Icosasoft" are trademarks of Icosasoft Software Inc. Other trademarks
+	belong to their respective owners.
+	
+	http://potrace.sourceforge.net/
+	http://www.drawing3d.de/Downloads.aspx (Vectorization)
+	https://github.com/PowerflasherBR/as3potrace (as3potrace)
+*/
+ 
+ package com.powerflasher.as3potrace
 {
 	import com.powerflasher.as3potrace.backend.IBackend;
 	import com.powerflasher.as3potrace.backend.NullBackend;
@@ -1409,10 +1437,6 @@ package com.powerflasher.as3potrace
 			return false;
 		}
 
-		/////////////////////////////////////////////////////////////////////////
-		// 
-		/////////////////////////////////////////////////////////////////////////
-
 		private function pathlist_to_curvearrayslist(plists:Array):Array
 		{
 			var res:Array = [];
@@ -1471,10 +1495,8 @@ package com.powerflasher.as3potrace
 			var kind:int;
 			if ((Math.abs(xprodf(new Point(cpa.x - a.x, cpa.y - a.y), new Point(b.x - a.x, b.y - a.y))) < 0.01) &&
 				(Math.abs(xprodf(new Point(cpb.x - b.x, cpb.y - b.y), new Point(b.x - a.x, b.y - a.y))) < 0.01)) {
-				//trace("line");
 				kind = CurveKind.LINE;
 			} else {
-				//trace("bezier");
 				kind = CurveKind.BEZIER;
 			}
 			if ((kind == CurveKind.LINE)) {
@@ -1492,31 +1514,6 @@ package com.powerflasher.as3potrace
 				curves.push(new Curve(CurveKind.BEZIER, a, cpa, cpb, b));
 			}
 		}
-
-		/*
-		private function dump_bitmap(bitmapDataMatrix:Vector.<Vector.<uint>>):void
-		{
-			for (var y:int = 0; y < bitmapDataMatrix.length; y++) {
-				var row:String = "";
-				for (var x:int = 0; x < bitmapDataMatrix[y].length; x++) {
-					row += (bitmapDataMatrix[y][x] == 0) ? "x " : ". ";
-				}
-				trace(row);
-			}
-		}
-
-		private function dump_path_lists(plists:Array):void
-		{
-			for (var j:int = 0; j < plists.length; j++) {
-				trace("Path List " + j);
-				var plist:Array = plists[j] as Array;
-				for (var i:int = 0; i < plist.length; i++) {
-					var path:Path = plist[i] as Path;
-					trace(path.toString(2));
-				}
-			}
-		}
-		*/
 
 		/////////////////////////////////////////////////////////////////////////
 		// AUXILIARY FUNCTIONS
@@ -1731,7 +1728,7 @@ package com.powerflasher.as3potrace
 		}
 		
 		/*
-		 * calculate (p1 - p0) x (p3 - p2)
+		 * Calculate (p1 - p0) x (p3 - p2)
 		 */
 		private function cprod(p0:Point, p1:Point, p2:Point, p3:Point):Number
 		{
@@ -1773,13 +1770,6 @@ package com.powerflasher.as3potrace
 		{
 			return (a < b) ? a : b;
 		}
-		
-		/*
-		private function max(a:int, b:int):int
-		{
-			return (a > b) ? a : b;
-		}
-		*/
 		
 		private function mod(a:int, n:int):int
 		{

@@ -1,6 +1,6 @@
 ﻿package 
 {
-	import flash.display.GraphicsEndFill;
+	import flash.utils.getTimer;
 	import com.bit101.components.PushButton;
 	import com.powerflasher.as3potrace.POTrace;
 	import com.powerflasher.as3potrace.backend.GraphicsDataBackend;
@@ -8,9 +8,13 @@
 
 	import flash.display.Bitmap;
 	import flash.display.BitmapData;
+	import flash.display.CapsStyle;
+	import flash.display.GraphicsEndFill;
 	import flash.display.GraphicsSolidFill;
 	import flash.display.GraphicsStroke;
 	import flash.display.IGraphicsData;
+	import flash.display.JointStyle;
+	import flash.display.LineScaleMode;
 	import flash.display.Loader;
 	import flash.display.LoaderInfo;
 	import flash.display.PixelSnapping;
@@ -83,12 +87,17 @@
 			
 			var gd:Vector.<IGraphicsData> = new Vector.<IGraphicsData>();
 			var strokeFill:GraphicsSolidFill = new GraphicsSolidFill(0xff0000, 1);
-			gd.push(new GraphicsStroke(2, false, "normal", "none", "round", 3, strokeFill));
+			gd.push(new GraphicsStroke(1, false, LineScaleMode.NONE, CapsStyle.ROUND, JointStyle.ROUND, 3, strokeFill));
 			gd.push(new GraphicsSolidFill(0xff0000, 0.25));
 			
 			var backend:IBackend = new GraphicsDataBackend(gd);
 			var potrace:POTrace = new POTrace();
+			
+			var t:int = getTimer();
 			potrace.potrace_trace(bitmap.bitmapData, null, backend);
+			t = getTimer() - t;
+			
+			trace(t + " ms");
 			
 			gd.push(new GraphicsEndFill());
 			

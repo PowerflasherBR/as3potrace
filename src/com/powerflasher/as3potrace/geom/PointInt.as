@@ -15,10 +15,5 @@ package com.powerflasher.as3potrace.geom
 		{
 			return new PointInt(x, y);
 		}
-		
-		public function toString():String
-		{
-			return "(" + x + "," + y + ")";
-		}
 	}
 }
