@@ -2,9 +2,15 @@
 {
 	import com.bit101.components.PushButton;
 	import com.powerflasher.as3potrace.POTrace;
+	import com.powerflasher.as3potrace.backend.GraphicsDataBackend;
+	import com.powerflasher.as3potrace.backend.IBackend;
 
 	import flash.display.Bitmap;
 	import flash.display.BitmapData;
+	import flash.display.GraphicsEndFill;
+	import flash.display.GraphicsSolidFill;
+	import flash.display.GraphicsStroke;
+	import flash.display.IGraphicsData;
 	import flash.display.Loader;
 	import flash.display.LoaderInfo;
 	import flash.display.PixelSnapping;
@@ -54,8 +60,27 @@
 		protected function traceImage(ImageClass:Class):void
 		{
 			var bm:Bitmap = new ImageClass();
+			bm.x = 10;
+			bm.y = 40;
+			bm.alpha = 0.2;
+			addChild(bm);
+			
+			var sprite:Sprite = new Sprite();
+			sprite.x = 10;
+			sprite.y = 40;
+			addChild(sprite);
+			
+			var gd:Vector.<IGraphicsData> = new Vector.<IGraphicsData>();
+			gd.push(new GraphicsStroke(4, false, "normal", "none", "round", 3, new GraphicsSolidFill(0x000000, 0)));
+			gd.push(new GraphicsSolidFill(0xff0000));
+			
+			var backend:IBackend = new GraphicsDataBackend(gd);
 			var potrace:POTrace = new POTrace();
-			potrace.potrace_trace(bm.bitmapData);
+			potrace.potrace_trace(bm.bitmapData, null, backend);
+			
+			gd.push(new GraphicsEndFill());
+			
+			sprite.graphics.drawGraphicsData(gd);
 		}
 
 		protected function loadBytes(image:ByteArray):void

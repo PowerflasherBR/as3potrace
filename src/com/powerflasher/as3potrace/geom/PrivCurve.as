@@ -24,7 +24,7 @@ package com.powerflasher.as3potrace.geom
 			// c[n][0] is unused for tag[n] = POTRACE_CORNER
 			controlPoints = new Vector.<Vector.<Point>>(n);
 			for (var i:int = 0; i < n; i++) {
-				controlPoints.push(new Vector.<Point>(3));
+				controlPoints[i] = new Vector.<Point>(3);
 			}
 			
 			// for POTRACE_CORNER, this equals c[1].			

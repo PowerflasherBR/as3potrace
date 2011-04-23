@@ -1,5 +1,9 @@
 package com.powerflasher.as3potrace
 {
+	import com.powerflasher.as3potrace.backend.IBackend;
+	import com.powerflasher.as3potrace.backend.TraceBackend;
+	import com.powerflasher.as3potrace.geom.Curve;
+	import com.powerflasher.as3potrace.geom.CurveKind;
 	import com.powerflasher.as3potrace.geom.Direction;
 	import com.powerflasher.as3potrace.geom.MonotonInterval;
 	import com.powerflasher.as3potrace.geom.Path;
@@ -16,6 +20,9 @@ package com.powerflasher.as3potrace
 		protected var bmHeight:uint;
 		protected var params:POTraceParams;
 		
+		protected static const POTRACE_CORNER:int = 1;
+		protected static const POTRACE_CURVETO:int = 2;
+		
 		public function POTrace()
 		{
 		}
@@ -26,18 +33,25 @@ package com.powerflasher.as3potrace
 		 * Returns an array of curvepaths. 
 		 * Each of this paths is a list of connecting curves.
 		 */
-		public function potrace_trace(bitmapData:BitmapData, params:POTraceParams = null):Array
+		public function potrace_trace(bitmapData:BitmapData, params:POTraceParams = null, backend:IBackend = null):Array
 		{
 			this.bmWidth = bitmapData.width;
 			this.bmHeight = bitmapData.height;
 			this.params = (params != null) ? params : new POTraceParams();
 			
+			if(backend == null) {
+				backend = new TraceBackend();
+			}
+			backend.init(bmWidth, bmHeight);
+			
+			var i:int;
+			var j:int;
 			var pos:uint = 0;
 			var bitmapDataVecTmp:Vector.<uint> = bitmapData.getVector(bitmapData.rect);
 			var bitmapDataMatrix:Vector.<Vector.<uint>> = new Vector.<Vector.<uint>>(bmHeight);
-			for (var i:int = 0; i < bmHeight; i++) {
+			for (i = 0; i < bmHeight; i++) {
 				var row:Vector.<uint> = bitmapDataVecTmp.slice(pos, pos + bmWidth);
-				for (var j:int = 0; j < row.length; j++) {
+				for (j = 0; j < row.length; j++) {
 					row[j] &= 0xffffff;
 				}
 				bitmapDataMatrix[i] = row;
@@ -45,8 +59,45 @@ package com.powerflasher.as3potrace
 			}
 
 			var plist:Array = bm_to_pathlist(bitmapDataMatrix);
+			
 			process_path(plist);
-			return PathList_to_ListOfCurveArrays(plist);
+			
+			var edges:Array = pathlist_to_curvearrayslist(plist);
+			
+			for (i = 0; i < edges.length; i++) {
+				var curvesArray:Array = edges[i] as Array;
+				for (j = 0; j < curvesArray.length; j++) {
+					var curve:Curve;
+					var curves:Array = curvesArray[j] as Array;
+					if(curves.length > 0) {
+						curve = curves[0] as Curve;
+						backend.moveTo(curve.a.clone());
+					}
+					for (var k:int = 0; k < curves.length; k++) {
+						curve = curves[k] as Curve;
+						switch(curve.kind) {
+							case CurveKind.BEZIER:
+								backend.addBezier(
+									curve.a.clone(),
+									curve.cpa.clone(),
+									curve.cpb.clone(),
+									curve.b.clone()
+								);
+								break;
+							case CurveKind.LINE:
+								backend.addLine(
+									curve.a.clone(),
+									curve.b.clone()
+								);
+								break;
+						}
+					}
+				}
+			}
+			
+			backend.exit();
+			
+			return edges;
 		}
 		
 		/*
@@ -455,7 +506,76 @@ package com.powerflasher.as3potrace
 					calc_lon(path);
 					bestpolygon(path);
 					adjust_vertices(path);
+					smooth(path.curves, 1, params.alphaMax);
 				}
+			}
+		}
+
+		private function smooth(curve:PrivCurve, sign:int, alphaMax:Number):void
+		{
+			var m:int = curve.n;
+			
+			var i:int;
+			var j:int;
+			var k:int;
+			var dd:Number;
+			var denom:Number;
+			var alpha:Number;
+			
+			var p2:Point;
+			var p3:Point;
+			var p4:Point;
+			
+			if (sign < 0) {
+				/* reverse orientation of negative paths */
+				for (i = 0, j = m - 1; i < j; i++, j--) {
+					var tmp:Point = curve.vertex[i];
+					curve.vertex[i] = curve.vertex[j];
+					curve.vertex[j] = tmp;
+				}
+			}
+			
+			/* examine each vertex and find its best fit */
+			for (i = 0; i < m; i++)
+			{
+				j = mod(i + 1, m);
+				k = mod(i + 2, m);
+				p4 = interval(1 / 2.0, curve.vertex[k], curve.vertex[j]);
+				
+				denom = ddenom(curve.vertex[i], curve.vertex[k]);
+				if (denom != 0) {
+					dd = dpara(curve.vertex[i], curve.vertex[j], curve.vertex[k]) / denom;
+					dd = Math.abs(dd);
+					alpha = (dd > 1) ? (1 - 1.0 / dd) : 0;
+					alpha = alpha / 0.75;
+				} else {
+					alpha = 4 / 3;
+				}
+				
+				// remember "original" value of alpha */
+				curve.alpha0[j] = alpha;
+				  
+				if (alpha > alphaMax) {
+					// pointed corner
+					curve.tag[j] = POTRACE_CORNER;
+					curve.controlPoints[j][1] = curve.vertex[j];
+					curve.controlPoints[j][2] = p4;
+				} else {
+					if (alpha < 0.55) {
+						alpha = 0.55;
+					} else if (alpha > 1) {
+						alpha = 1;
+					}
+					p2 = interval(.5 + .5 * alpha, curve.vertex[i], curve.vertex[j]);
+					p3 = interval(.5 + .5 * alpha, curve.vertex[k], curve.vertex[j]);
+					curve.tag[j] = POTRACE_CURVETO;
+					curve.controlPoints[j][0] = p2;
+					curve.controlPoints[j][1] = p3;
+					curve.controlPoints[j][2] = p4;
+				}
+				// store the "cropped" value of alpha
+				curve.alpha[j] = alpha;
+				curve.beta[j] = 0.5;
 			}
 		}
 
@@ -1045,11 +1165,87 @@ package com.powerflasher.as3potrace
 		    return Math.sqrt(ex * ex * a + 2 * ex * ey * b + ey * ey * c);
 		}
 
-		private function PathList_to_ListOfCurveArrays(plist:Array):Array
+		private function pathlist_to_curvearrayslist(plists:Array):Array
 		{
-			return null;
+			var res:Array = [];
+			
+			/* call downstream function with each path */
+			for (var j:int = 0; j < plists.length; j++)
+			{
+				var plist:Array = plists[j] as Array;
+				var clist:Array = [];
+				res.push(clist);
+
+                for (var i:int = 0; i < plist.length; i++)
+                {
+                    var p:Path = plist[i] as Path;
+                    var A:Point = p.curves.controlPoints[p.curves.n - 1][2];
+                    var curves:Array = [];
+                    for (var k:int = 0; k < p.curves.n; k++)
+                    {
+						var C:Point = p.curves.controlPoints[k][0];
+						var D:Point = p.curves.controlPoints[k][1];
+						var E:Point = p.curves.controlPoints[k][2];
+						if (p.curves.tag[k] == POTRACE_CORNER) {
+							add_curve(curves, A, A, D, D);
+							add_curve(curves, D, D, E, E);
+						} else {
+							add_curve(curves, A, C, D, E);
+						}
+						A = E;
+					}
+					if (curves.length > 0)
+					{
+						var cl:Curve = curves[curves.length - 1] as Curve;
+						var cf:Curve = curves[0] as Curve;
+						if ((cl.kind == CurveKind.LINE) && (cf.kind == CurveKind.LINE)
+							&& iprod(cl.b, cl.a, cf.b) < 0
+							&& (Math.abs(xprodf(
+								new Point(cf.b.x - cf.a.x, cf.b.y - cf.a.y),
+								new Point(cl.a.x - cl.a.x, cl.b.y - cl.a.y))) < 0.01))
+						{
+							curves[0] = new Curve(CurveKind.LINE, cl.a, cl.a, cl.a, cf.b);
+							curves.pop();
+						}
+						var curveList:Array = [];
+						for (var ci:int = 0; ci < curves.length; ci++) {
+							curveList.push(curves[ci]);
+						}
+						clist.push(curveList);
+					}
+                }
+			}
+			return res;
 		}
-		
+
+		private function add_curve(curves:Array, a:Point, cpa:Point, cpb:Point, b:Point):void
+		{
+			var kind:int;
+			if ((Math.abs(xprodf(new Point(cpa.x - a.x, cpa.y - a.y), new Point(b.x - a.x, b.y - a.y))) < 0.01) &&
+				(Math.abs(xprodf(new Point(cpb.x - b.x, cpb.y - b.y), new Point(b.x - a.x, b.y - a.y))) < 0.01)) {
+				trace("line");
+				kind = CurveKind.LINE;
+			} else {
+				trace("bezier");
+				kind = CurveKind.BEZIER;
+			}
+			if ((kind == CurveKind.LINE)) {
+			    if ((curves.length > 0) && (Curve(curves[curves.length - 1]).kind == CurveKind.LINE)) {
+			        var c:Curve = curves[curves.length - 1] as Curve;
+			        if ((Math.abs(xprodf(new Point(c.b.x - c.a.x, c.b.y - c.a.y), new Point(b.x - a.x, b.y - a.y))) < 0.01) && (iprod(c.b, c.a, b) < 0)) {
+			            curves[curves.length - 1] = new Curve(kind, c.a, c.a, c.a, b);
+			        } else {
+			            curves.push(new Curve(CurveKind.LINE, a, cpa, cpb, b));
+			        }
+			    } else {
+			        curves.push(new Curve(CurveKind.LINE, a, cpa, cpb, b));
+			    }
+			} else {
+			    curves.push(new Curve(CurveKind.BEZIER, a, cpa, cpb, b));
+			}
+		}
+
+		/*
 		private function dump_bitmap(bitmapDataMatrix:Vector.<Vector.<uint>>):void
 		{
 			for (var y:int = 0; y < bitmapDataMatrix.length; y++) {
@@ -1060,12 +1256,52 @@ package com.powerflasher.as3potrace
 				trace(row);
 			}
 		}
+		*/
+		
+		private function dpara(p0:Point, p1:Point, p2:Point):Number {
+			return (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
+		}
+		
+		private function ddenom(p0:Point, p2:Point):Number
+		{
+			var r:PointInt = dorth_infty(p0, p2);
+			return r.y * (p2.x - p0.x) - r.x * (p2.y - p0.y);
+		}
+
+		private function dorth_infty(p0:Point, p2:Point):PointInt
+		{
+			return new PointInt(-sign(p2.y - p0.y), sign(p2.x - p0.x));
+		}
+		
+		private function interval(lambda:Number, a:Point, b:Point):Point
+		{
+			return new Point(a.x + lambda * (b.x - a.x), a.y + lambda * (b.y - a.y));
+		}
 		
 		private function xprod(p1:PointInt, p2:PointInt):int
 		{
 			return p1.x * p2.y - p1.y * p2.x;
 		}
 		
+		private function xprodf(p1:Point, p2:Point):int
+		{
+			return p1.x * p2.y - p1.y * p2.x;
+		}
+		
+        /* calculate (p1 - p0) * (p2 - p0) */
+        private function iprod(p0:Point, p1:Point, p2:Point):Number
+        {
+            return (p1.x - p0.x) * (p2.x - p0.x) + (p1.y - p0.y) * (p2.y - p0.y);
+        }
+
+        /* calculate (p1 - p0) * (p3 - p2) */
+        /*
+        private function iprod1(p0:Point, p1:Point, p2:Point, p3:Point):Number
+        {
+            return (p1.x - p0.x) * (p3.x - p2.x) + (p1.y - p0.y) * (p3.y - p2.y);
+        }
+        */
+
 		private function abs(a:int):int
 		{
 			return (a > 0) ? a : -a;
@@ -1090,10 +1326,12 @@ package com.powerflasher.as3potrace
 			return (a < b) ? a : b;
 		}
 		
+		/*
 		private function max(a:int, b:int):int
 		{
 			return (a > b) ? a : b;
 		}
+		*/
 		
 		private function mod(a:int, n:int):int
 		{
