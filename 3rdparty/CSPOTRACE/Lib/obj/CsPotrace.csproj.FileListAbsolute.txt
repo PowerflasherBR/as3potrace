@@ -1,5 +1,0 @@
-Q:\Demos\D3DPotrace\Lib\bin\Debug\CsPotrace.dll
-Q:\Demos\D3DPotrace\Lib\bin\Debug\CsPotrace.pdb
-Q:\Demos\D3DPotrace\Lib\obj\Debug\ResolveAssemblyReference.cache
-Q:\Demos\D3DPotrace\Lib\obj\Debug\CsPotrace.dll
-Q:\Demos\D3DPotrace\Lib\obj\Debug\CsPotrace.pdb
