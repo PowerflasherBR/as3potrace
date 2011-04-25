@@ -47,12 +47,34 @@
 	{
 		protected var bmWidth:uint;
 		protected var bmHeight:uint;
-		protected var params:POTraceParams;
+		
+		protected var _params:POTraceParams;
+		protected var _backend:IBackend;
 		
 		protected static const POTRACE_CORNER:int = 1;
 		protected static const POTRACE_CURVETO:int = 2;
 
 		protected static const COS179:Number = Math.cos(179 * Math.PI / 180);
+		
+		public function POTrace()
+		{
+			_params = new POTraceParams();
+			_backend = new NullBackend();
+		}
+
+		public function get params():POTraceParams {
+			return _params;
+		}
+		public function set params(params:POTraceParams):void {
+			_params = params;
+		}
+
+		public function get backend():IBackend {
+			return _backend;
+		}
+		public function set backend(backend:IBackend):void {
+			_backend = backend;
+		}
 		
 		/*
 		 * Main function
@@ -60,15 +82,14 @@
 		 * Returns an array of curvepaths. 
 		 * Each of this paths is a list of connecting curves.
 		 */
-		public function potrace_trace(bitmapData:BitmapData, params:POTraceParams = null, backend:IBackend = null):Array
+		public function potrace_trace(bitmapData:BitmapData):Array
 		{
 			// Make sure there is a 1px white border
 			var bitmapDataCopy:BitmapData = new BitmapData(bitmapData.width + 2, bitmapData.height + 2, false, 0xffffff);
-			bitmapDataCopy.copyPixels(bitmapData, bitmapData.rect, new Point(1, 1));
+			bitmapDataCopy.threshold(bitmapData, bitmapData.rect, new Point(1, 1), "<=", params.threshold, 0x000000, 0xffffff, false);
 			
 			this.bmWidth = bitmapDataCopy.width;
 			this.bmHeight = bitmapDataCopy.height;
-			this.params = (params != null) ? params : new POTraceParams();
 
 			if(backend == null) {
 				backend = new NullBackend();
