@@ -5,6 +5,9 @@ package com.powerflasher.as3potrace
 		// Value for threshold filter applied to bitmap before processing
 		public var threshold:uint = 0x888888;
 		
+		// The thrshold operator used
+		public var thresholdOperator:String = "<=";
+		
 		// Area of largest path to be ignored
 		public var turdSize:int = 2;
 		
