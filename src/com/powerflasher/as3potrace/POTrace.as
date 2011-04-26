@@ -56,10 +56,10 @@
 
 		protected static const COS179:Number = Math.cos(179 * Math.PI / 180);
 		
-		public function POTrace()
+		public function POTrace(params:POTraceParams = null, backend:IBackend = null)
 		{
-			_params = new POTraceParams();
-			_backend = new NullBackend();
+			_params = params || new POTraceParams();
+			_backend = backend || new NullBackend();
 		}
 
 		public function get params():POTraceParams {
@@ -86,7 +86,7 @@
 		{
 			// Make sure there is a 1px white border
 			var bitmapDataCopy:BitmapData = new BitmapData(bitmapData.width + 2, bitmapData.height + 2, false, 0xffffff);
-			bitmapDataCopy.threshold(bitmapData, bitmapData.rect, new Point(1, 1), "<=", params.threshold, 0x000000, 0xffffff, false);
+			bitmapDataCopy.threshold(bitmapData, bitmapData.rect, new Point(1, 1), params.thresholdOperator, params.threshold, 0x000000, 0xffffff, false);
 			
 			this.bmWidth = bitmapDataCopy.width;
 			this.bmHeight = bitmapDataCopy.height;
