@@ -8,6 +8,14 @@ package com.powerflasher.as3potrace.backend
 		{
 		}
 
+		public function initShape():void
+		{
+		}
+		
+		public function initSubShape(positive:Boolean):void
+		{
+		}
+		
 		public function moveTo(a:Point):void
 		{
 		}
@@ -20,6 +28,14 @@ package com.powerflasher.as3potrace.backend
 		{
 		}
 
+		public function exitSubShape():void
+		{
+		}
+		
+		public function exitShape():void
+		{
+		}
+		
 		public function exit():void
 		{
 		}

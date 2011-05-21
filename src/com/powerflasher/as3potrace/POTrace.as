@@ -91,12 +91,6 @@
 			this.bmWidth = bitmapDataCopy.width;
 			this.bmHeight = bitmapDataCopy.height;
 
-			if(backend == null) {
-				backend = new NullBackend();
-			}
-
-			backend.init(bmWidth, bmHeight);
-			
 			var i:int;
 			var j:int;
 			var k:int;
@@ -120,36 +114,46 @@
 			
 			var shapes:Array = pathlist_to_curvearrayslist(plist);
 			
-			for (i = 0; i < shapes.length; i++) {
-				var shape:Array = shapes[i] as Array;
-				for (j = 0; j < shape.length; j++) {
-					var curves:Array = shape[j] as Array;
-					if(curves.length > 0) {
-						var curve:Curve = curves[0] as Curve;
-						backend.moveTo(curve.a.clone());
-						for (k = 0; k < curves.length; k++) {
-							curve = curves[k] as Curve;
-							switch(curve.kind) {
-								case CurveKind.BEZIER:
-									backend.addBezier(
-										curve.a.clone(),
-										curve.cpa.clone(),
-										curve.cpb.clone(),
-										curve.b.clone()
-									);
-									break;
-								case CurveKind.LINE:
-									backend.addLine(
-										curve.a.clone(),
-										curve.b.clone()
-									);
-									break;
+			if(backend != null)
+			{
+				backend.init(bmWidth, bmHeight);
+				
+				for (i = 0; i < shapes.length; i++) {
+					backend.initShape();
+					var shape:Array = shapes[i] as Array;
+					for (j = 0; j < shape.length; j++) {
+						backend.initSubShape((j % 2) == 0);
+						var curves:Array = shape[j] as Array;
+						if(curves.length > 0) {
+							var curve:Curve = curves[0] as Curve;
+							backend.moveTo(curve.a.clone());
+							for (k = 0; k < curves.length; k++) {
+								curve = curves[k] as Curve;
+								switch(curve.kind) {
+									case CurveKind.BEZIER:
+										backend.addBezier(
+											curve.a.clone(),
+											curve.cpa.clone(),
+											curve.cpb.clone(),
+											curve.b.clone()
+										);
+										break;
+									case CurveKind.LINE:
+										backend.addLine(
+											curve.a.clone(),
+											curve.b.clone()
+										);
+										break;
+								}
 							}
 						}
+						backend.exitSubShape();
 					}
+					backend.exitShape();
 				}
+				
+				backend.exit();
 			}
-			backend.exit();
 			
 			return shapes;
 		}
@@ -673,7 +677,7 @@
 				
 				// Keep track of "directions" that have occurred
 				dir = (3 + 3 * (pt[mod(i + 1, n)].x - pt[i].x) + (pt[mod(i + 1, n)].y - pt[i].y)) / 2;
-				ct[dir]++;
+				ct[dir % 4]++;
 				
 				constraint[0].x = 0;
 				constraint[0].y = 0;
